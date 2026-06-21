@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "crossword-transcriber"
+version = "0.1.0"
+description = "Read handwritten crossword grids from images and write letter arrays back into empty grids."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Tom Flannaghan", email = "tomflannaghan@gmail.com" }]
+dependencies = [
+    "numpy>=1.26",
+    "opencv-python>=4.9",
+    "pillow>=10.2",
+]
+
+[project.optional-dependencies]
+# Heavy ML deps for the HCR backend (Phase 4). Kept separate so the core
+# library installs without a deep-learning toolchain.
+recognize = [
+    "torch>=2.2",
+    "torchvision>=0.17",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+crossword-transcriber = "crossword_transcriber.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/crossword_transcriber"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
