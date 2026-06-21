@@ -30,7 +30,10 @@ segmentation**. Build this once and reuse it for both reading and writing.
   do **not** need to detect the bars at all to transcribe letters — every cell is
   read independently.
 - **Letters are single uppercase A–Z only.** No digits, no rebus/multi-letter
-  cells. The classifier output space is exactly 26 classes.
+  cells. The classifier output space is exactly 26 classes. Multi-letter cells
+  (see `tests/fixtures/barred_multiletter_cells.png`) are **explicitly out of
+  scope for v1** — that fixture is used for grid-*detection* testing only, not
+  transcription.
 - **Offline only.** No cloud APIs. HCR must run locally (rules out cloud Vision;
   EMNIST CNN is the primary plan, with TrOCR as an optional local upgrade).
 - **Output is a list of lists** (`list[list[str | None]]`), `None` for a block
