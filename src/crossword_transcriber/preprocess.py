@@ -21,6 +21,20 @@ def binarize(gray: np.ndarray) -> np.ndarray:
     """Adaptive threshold to a binary image (ink = 255, background = 0).
 
     Returns an inverted binary image so that grid lines and letters are the
-    foreground, which is what the morphology/segmentation stages expect.
+    foreground, which is what the morphology/segmentation stages expect. Adaptive
+    (rather than global) thresholding tolerates the mild brightness gradients
+    found even in clean scans.
     """
-    raise NotImplementedError("Phase 1: implement adaptive binarization")
+    blurred = cv2.GaussianBlur(gray, (3, 3), 0)
+    # Block size scales with image size but stays odd and not too small.
+    block_size = max(15, (min(gray.shape[:2]) // 40) | 1)
+    if block_size % 2 == 0:
+        block_size += 1
+    return cv2.adaptiveThreshold(
+        blurred,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        block_size,
+        10,
+    )
