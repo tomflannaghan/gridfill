@@ -31,19 +31,12 @@ def _detect_cells(name: str) -> list[list]:
     [
         ("barred.png", 12, 12),
         ("barred_multiletter_cells.png", 15, 15),
+        # Heavy handwriting streaks across cells, yet segmentation recovers the
+        # exact (non-square) 11x12 grid.
+        ("barred_very_messy.png", 11, 12),
     ],
 )
-def test_clean_fixtures_detect_exact_grid(name: str, rows: int, cols: int) -> None:
+def test_fixtures_detect_exact_grid(name: str, rows: int, cols: int) -> None:
     boxes = _detect_cells(name)
     assert len(boxes) == rows
     assert all(len(row) == cols for row in boxes)
-
-
-def test_messy_fixture_detects_plausible_grid() -> None:
-    # Heavy handwriting streaks across cells; we only require the grid to be
-    # isolated and roughly square, not pixel-perfect.
-    boxes = _detect_cells("barred_very_messy.png")
-    rows, cols = len(boxes), len(boxes[0])
-    assert 10 <= rows <= 13
-    assert 10 <= cols <= 13
-    assert abs(rows - cols) <= 1
