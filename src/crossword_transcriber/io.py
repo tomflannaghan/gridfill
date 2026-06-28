@@ -26,7 +26,7 @@ def load_image(source: ImageSource) -> np.ndarray:
     image = cv2.imread(path, cv2.IMREAD_COLOR)
     if image is None:
         raise FileNotFoundError(f"Could not read image: {path!r}")
-    return image
+    return np.asarray(image)
 
 
 def save_image(path: str | os.PathLike[str], image: np.ndarray) -> None:

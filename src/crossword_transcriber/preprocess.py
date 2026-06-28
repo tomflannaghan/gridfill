@@ -14,7 +14,7 @@ def to_grayscale(image: np.ndarray) -> np.ndarray:
     """Convert a BGR image to single-channel grayscale."""
     if image.ndim == 2:
         return image
-    return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return np.asarray(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
 
 
 def binarize(gray: np.ndarray) -> np.ndarray:
@@ -30,11 +30,13 @@ def binarize(gray: np.ndarray) -> np.ndarray:
     block_size = max(15, (min(gray.shape[:2]) // 40) | 1)
     if block_size % 2 == 0:
         block_size += 1
-    return cv2.adaptiveThreshold(
-        blurred,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY_INV,
-        block_size,
-        10,
+    return np.asarray(
+        cv2.adaptiveThreshold(
+            blurred,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV,
+            block_size,
+            10,
+        )
     )

@@ -14,6 +14,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_read = sub.add_parser("read", help="Transcribe a filled grid image to text.")
     p_read.add_argument("image", help="Path to the filled-grid scan.")
     p_read.add_argument("--model", help="Path to ONNX model weights for letter recognition.")
+    p_read.add_argument(
+        "--debug-dir", help="Save each cell image and its preprocessed 28x28 to this directory."
+    )
 
     p_write = sub.add_parser("write", help="Write letters into an empty grid image.")
     p_write.add_argument("image", help="Path to the empty-grid image.")
@@ -32,7 +35,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             classifier = CnnLetterClassifier(args.model)
 
-        grid = read_grid(args.image, classifier=classifier)
+        grid = read_grid(args.image, classifier=classifier, debug_dir=args.debug_dir)
         for row in grid:
             print("".join((c if c else ".") if c is not None else "#" for c in row))
         return 0

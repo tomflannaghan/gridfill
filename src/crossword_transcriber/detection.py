@@ -39,7 +39,7 @@ def extract_line_mask(binary: np.ndarray) -> np.ndarray:
     v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, v_size))
     horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, h_kernel)
     vertical = cv2.morphologyEx(binary, cv2.MORPH_OPEN, v_kernel)
-    return cv2.bitwise_or(horizontal, vertical)
+    return np.asarray(cv2.bitwise_or(horizontal, vertical))
 
 
 def _order_corners(pts: np.ndarray) -> np.ndarray:

@@ -17,11 +17,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Heavy ML deps for the HCR backend (Phase 4). Kept separate so the core
-# library installs without a deep-learning toolchain.
-recognize = [
+# Training deps for scripts/train_emnist.py (torch + ONNX export).
+train = [
     "torch>=2.2",
     "torchvision>=0.17",
+    "onnx>=1.15",
 ]
 dev = [
     "pytest>=8.0",

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Train an EMNIST Letters CNN and export to ONNX.
 
-Requires the ``[recognize]`` extra (torch, torchvision)::
+Requires the ``[train]`` extra (torch, torchvision, onnx)::
 
-    uv pip install -e ".[recognize]"
+    uv pip install -e ".[train]"
     python scripts/train_emnist.py --output models/emnist_cnn.onnx
 
 The exported ONNX model is loaded at inference time by ``CnnLetterClassifier``
@@ -15,18 +15,67 @@ from __future__ import annotations
 import argparse
 import sys
 
+try:
+    import torch
+    import torch.nn as nn
+    from PIL import Image
+    from torch.utils.data import DataLoader, Subset
+    from torchvision import datasets, transforms
+
+    _HAS_TORCH = True
+except ImportError:
+    _HAS_TORCH = False
+
+_UPPER_START = 10
+_UPPER_END = 36
+
+
+class _TransposeEMNIST:
+    """EMNIST images are stored transposed; this corrects them.
+
+    A plain class (not a lambda) so the DataLoader can pickle it for
+    multi-process workers.
+    """
+
+    def __call__(self, img: Image.Image) -> Image.Image:
+        return img.transpose(Image.Transpose.TRANSPOSE)
+
+
+class _UppercaseLabel:
+    """Remap EMNIST ByClass uppercase labels (10-35) to 0-25."""
+
+    def __call__(self, y: int) -> int:
+        return y - _UPPER_START
+
+
+class EmnistCNN(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(1, 32, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+            nn.Conv2d(32, 64, 3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(2),
+        )
+        self.classifier = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(64 * 7 * 7, 128),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.5),
+            nn.Linear(128, 26),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.classifier(self.features(x))
+
 
 def main() -> None:
-    try:
-        import torch
-        import torch.nn as nn
-        from PIL import Image
-        from torch.utils.data import DataLoader
-        from torchvision import datasets, transforms
-    except ImportError:
+    if not _HAS_TORCH:
         sys.exit(
-            "Training requires torch and torchvision.\n"
-            "Install with: uv pip install -e '.[recognize]'"
+            "Training requires torch, torchvision, and onnx.\n"
+            "Install with: uv pip install -e '.[train]'"
         )
 
     parser = argparse.ArgumentParser(description="Train EMNIST Letters CNN → ONNX")
@@ -38,70 +87,58 @@ def main() -> None:
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif hasattr(torch, "xpu") and torch.xpu.is_available():
+        device = torch.device("xpu")
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
     print(f"Device: {device}")
-
-    # --- Model -----------------------------------------------------------
-
-    class EmnistCNN(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.features = nn.Sequential(
-                nn.Conv2d(1, 32, 3, padding=1),
-                nn.ReLU(inplace=True),
-                nn.MaxPool2d(2),
-                nn.Conv2d(32, 64, 3, padding=1),
-                nn.ReLU(inplace=True),
-                nn.MaxPool2d(2),
-            )
-            self.classifier = nn.Sequential(
-                nn.Flatten(),
-                nn.Linear(64 * 7 * 7, 128),
-                nn.ReLU(inplace=True),
-                nn.Dropout(0.5),
-                nn.Linear(128, 26),
-            )
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.classifier(self.features(x))
 
     # --- Data ------------------------------------------------------------
 
-    # EMNIST images are stored transposed; fix during loading.
+    transpose = _TransposeEMNIST()
+    relabel = _UppercaseLabel()
+
     train_transform = transforms.Compose(
         [
-            lambda img: img.transpose(Image.Transpose.TRANSPOSE),
+            transpose,
             transforms.RandomAffine(degrees=10, translate=(0.1, 0.1), scale=(0.9, 1.1)),
             transforms.ToTensor(),
         ]
     )
     test_transform = transforms.Compose(
         [
-            lambda img: img.transpose(Image.Transpose.TRANSPOSE),
+            transpose,
             transforms.ToTensor(),
         ]
     )
 
-    # Labels are 1-indexed (1=A … 26=Z); shift to 0-indexed for CrossEntropyLoss.
-    def target_transform(y: int) -> int:
-        return y - 1
-
-    train_set = datasets.EMNIST(
+    train_full = datasets.EMNIST(
         root="data",
-        split="letters",
+        split="byclass",
         train=True,
         download=True,
         transform=train_transform,
-        target_transform=target_transform,
+        target_transform=relabel,
     )
-    test_set = datasets.EMNIST(
+    test_full = datasets.EMNIST(
         root="data",
-        split="letters",
+        split="byclass",
         train=False,
         download=True,
         transform=test_transform,
-        target_transform=target_transform,
+        target_transform=relabel,
     )
+
+    train_idx = [i for i, t in enumerate(train_full.targets) if _UPPER_START <= t < _UPPER_END]
+    test_idx = [i for i, t in enumerate(test_full.targets) if _UPPER_START <= t < _UPPER_END]
+    train_set = Subset(train_full, train_idx)
+    test_set = Subset(test_full, test_idx)
+
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, num_workers=2)
     test_loader = DataLoader(test_set, batch_size=args.batch_size, num_workers=2)
 
@@ -147,6 +184,7 @@ def main() -> None:
         input_names=["input"],
         output_names=["output"],
         dynamic_axes={"input": {0: "batch"}, "output": {0: "batch"}},
+        dynamo=False,
     )
     print(f"Saved ONNX model to {args.output}")
 

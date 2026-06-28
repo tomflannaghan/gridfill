@@ -66,8 +66,10 @@ def write_grid(
     warped = cv2.warpPerspective(np.array(mask), inverse, (src_w, src_h))
     alpha = (warped.astype(np.float32) / 255.0)[:, :, None]
     fill = np.array(color, dtype=np.float32).reshape(1, 1, 3)
-    image = (image.astype(np.float32) * (1 - alpha) + fill * alpha).round().astype(np.uint8)
+    result = np.asarray(
+        (image.astype(np.float32) * (1 - alpha) + fill * alpha).round().astype(np.uint8)
+    )
 
     if out_path is not None:
-        save_image(out_path, image)
-    return image
+        save_image(out_path, result)
+    return result

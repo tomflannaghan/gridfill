@@ -15,6 +15,7 @@ import numpy as np
 from . import Prediction
 
 _LABELS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_CORNER_MASK_DIVISOR = 3
 
 
 def _softmax(x: np.ndarray) -> np.ndarray:
@@ -30,6 +31,12 @@ def preprocess_cell(gray: np.ndarray) -> np.ndarray:
     ``uint8`` with values in ``[0, 255]``.
     """
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    # Mask the top-left corner where printed clue numbers sit so they don't
+    # distort the letter's bounding box and centering.
+    bh, bw = binary.shape[:2]
+    binary[: bh // _CORNER_MASK_DIVISOR, : bw // _CORNER_MASK_DIVISOR] = 0
+
     coords = cv2.findNonZero(binary)
     if coords is None:
         return np.zeros((28, 28), dtype=np.uint8)

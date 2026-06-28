@@ -2,28 +2,76 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import cv2
+import numpy as np
 
 from .classify import classify_cell
 from .detection import detect_grid
 from .io import ImageSource, load_image
 from .preprocess import binarize, to_grayscale
 from .recognize import LetterClassifier
+from .recognize.cnn import preprocess_cell
 from .segmentation import infer_cell_boxes
 from .types import CellKind, LetterGrid
 
-_BORDER_MARGIN_DIVISOR = 6
+_LINE_INK_THRESHOLD = 0.4
+_MAX_SCAN_DIVISOR = 6
+
+
+def _strip_border_lines(gray: np.ndarray) -> np.ndarray:
+    """White-out residual grid lines / bars along cell edges."""
+    h, w = gray.shape[:2]
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    result = gray.copy()
+    max_scan = max(2, min(h, w) // _MAX_SCAN_DIVISOR)
+
+    for r in range(max_scan):
+        if binary[r].mean() / 255 > _LINE_INK_THRESHOLD:
+            result[r, :] = 255
+        else:
+            break
+
+    for r in range(h - 1, h - 1 - max_scan, -1):
+        if binary[r].mean() / 255 > _LINE_INK_THRESHOLD:
+            result[r, :] = 255
+        else:
+            break
+
+    for c in range(max_scan):
+        if binary[:, c].mean() / 255 > _LINE_INK_THRESHOLD:
+            result[:, c] = 255
+        else:
+            break
+
+    for c in range(w - 1, w - 1 - max_scan, -1):
+        if binary[:, c].mean() / 255 > _LINE_INK_THRESHOLD:
+            result[:, c] = 255
+        else:
+            break
+
+    return result
 
 
 def read_grid(
     source: ImageSource,
     classifier: LetterClassifier | None = None,
+    debug_dir: str | os.PathLike[str] | None = None,
 ) -> LetterGrid:
     """Transcribe a filled crossword scan into a list-of-lists of letters.
 
     ``None`` marks a block cell, ``""`` an empty white cell (or a letter cell
     when no *classifier* is provided), and ``"A".."Z"`` a recognised letter.
+
+    If *debug_dir* is set, saves each cell's inner crop and its preprocessed
+    28x28 image to that directory, named ``R{row}_C{col}_{letter}.png`` and
+    ``R{row}_C{col}_{letter}_prep.png``.
     """
+    if debug_dir is not None:
+        Path(debug_dir).mkdir(parents=True, exist_ok=True)
+
     image = load_image(source)
     gray = to_grayscale(image)
     detected = detect_grid(binarize(gray))
@@ -31,19 +79,25 @@ def read_grid(
     rectified = cv2.warpPerspective(gray, detected.transform, detected.size)
 
     result: LetterGrid = []
-    for row_boxes in boxes:
+    for r, row_boxes in enumerate(boxes):
         row: list[str | None] = []
-        for box in row_boxes:
+        for c, box in enumerate(row_boxes):
             cell = rectified[box.y : box.y2, box.x : box.x2]
             kind = classify_cell(cell)
 
             if kind is CellKind.BLOCK:
                 row.append(None)
             elif kind is CellKind.LETTER and classifier is not None:
-                h, w = cell.shape[:2]
-                margin = max(2, min(h, w) // _BORDER_MARGIN_DIVISOR)
-                inner = cell[margin : h - margin, margin : w - margin]
-                row.append(classifier.predict(inner).letter)
+                clean = _strip_border_lines(cell)
+                prediction = classifier.predict(clean)
+                row.append(prediction.letter)
+                if debug_dir is not None:
+                    tag = f"R{r}_C{c}_{prediction.letter}"
+                    cv2.imwrite(str(Path(debug_dir) / f"{tag}.png"), clean)
+                    cv2.imwrite(
+                        str(Path(debug_dir) / f"{tag}_prep.png"),
+                        preprocess_cell(clean),
+                    )
             else:
                 row.append("")
         result.append(row)

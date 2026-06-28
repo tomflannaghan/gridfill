@@ -40,7 +40,7 @@ class TestPreprocessCell:
     def test_ink_is_centred(self) -> None:
         """Ink placed off-centre should end up near the middle of the 28x28 output."""
         cell = np.full((60, 60), 240, dtype=np.uint8)
-        cell[5:15, 5:15] = 20  # top-left corner ink
+        cell[40:50, 40:50] = 20  # bottom-right ink
         result = preprocess_cell(cell)
         # The bright (ink) mass should be centred
         ys, xs = np.where(result > 50)
