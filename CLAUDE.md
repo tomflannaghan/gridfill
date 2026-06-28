@@ -23,9 +23,9 @@ ruff format src tests                     # format (run before committing)
 mypy src                                  # type check (strict)
 ```
 
-Heavy ML deps (torch/torchvision) live in the optional `[recognize]` extra so the
-core installs without a deep-learning toolchain. They are **deferred to Phase 4**
-(torch also has no Python 3.14 wheels yet; the dev env runs 3.14).
+Heavy ML deps (torch/torchvision/onnx) live in the optional `[train]` extra so the
+core installs without a deep-learning toolchain. Runtime inference uses `cv2.dnn`
+with no torch dependency.
 
 ## Conventions
 
@@ -70,3 +70,8 @@ Output is `list[list[str | None]]`: `None` block / `""` empty / `"A".."Z"`.
 - Handwriting that **crosses cell borders** (see `barred_very_messy.png`) can add
   streaks to the projection profile; segmentation handled it on that fixture, but
   it's the likely failure mode to watch when hardening.
+- **Cell cleanup pipeline** (`reader.py`): before recognition each cell goes through
+  border line stripping → background normalization → corner clue removal. Corner
+  clue removal uses connected components and must require the **full bounding box**
+  to be contained in the corner region — checking only the origin point removes
+  parts of letters that start in the corner but extend beyond it.
