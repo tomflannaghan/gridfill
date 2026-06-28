@@ -57,6 +57,41 @@ def _strip_border_lines(gray: np.ndarray) -> np.ndarray:
     return result
 
 
+_CORNER_HEIGHT_FRAC = 0.45
+_CORNER_WIDTH_FRAC = 0.55
+
+
+def _remove_corner_clue(gray: np.ndarray) -> np.ndarray:
+    """Erase isolated ink blobs in the top-left corner (clue numbers).
+
+    Keeps the largest component (the letter) and removes smaller ones
+    whose origin falls inside the corner region.
+    """
+    h, w = gray.shape[:2]
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary)
+    if n_labels <= 1:
+        return gray
+
+    corner_h = int(h * _CORNER_HEIGHT_FRAC)
+    corner_w = int(w * _CORNER_WIDTH_FRAC)
+
+    largest_label = int(np.argmax(stats[1:, cv2.CC_STAT_AREA])) + 1
+    result = gray.copy()
+
+    for label in range(1, n_labels):
+        if label == largest_label:
+            continue
+        x = stats[label, cv2.CC_STAT_LEFT]
+        y = stats[label, cv2.CC_STAT_TOP]
+        bw = stats[label, cv2.CC_STAT_WIDTH]
+        bh = stats[label, cv2.CC_STAT_HEIGHT]
+        if x + bw <= corner_w and y + bh <= corner_h:
+            result[labels == label] = 255
+
+    return result
+
+
 def _normalize_background(gray: np.ndarray) -> np.ndarray:
     """Shift cell background to white so shaded cells match EMNIST expectations."""
     bg = float(np.percentile(gray, _BG_PERCENTILE))
@@ -99,7 +134,7 @@ def read_grid(
             if kind is CellKind.BLOCK:
                 row.append(None)
             elif kind is CellKind.LETTER and classifier is not None:
-                clean = _normalize_background(_strip_border_lines(cell))
+                clean = _remove_corner_clue(_normalize_background(_strip_border_lines(cell)))
                 prediction = classifier.predict(clean)
                 row.append(prediction.letter)
                 if debug_dir is not None:

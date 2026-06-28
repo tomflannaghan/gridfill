@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import cv2
 import numpy as np
 
 from crossword_transcriber import read_grid, write_grid
@@ -124,6 +125,31 @@ def test_read_barred_fixture_all_letter() -> None:
     assert all(len(row) == 12 for row in result)
     assert clf.call_count == 144
     assert all(c == "X" for row in result for c in row)
+
+
+def test_remove_corner_clue_number() -> None:
+    """Corner clue numbers should be erased without damaging the letter."""
+    from crossword_transcriber.reader import _remove_corner_clue
+
+    cell = cv2.imread(str(FIXTURES / "numbered_cell.png"), cv2.IMREAD_GRAYSCALE)
+    cleaned = _remove_corner_clue(cell)
+
+    _, orig_bin = cv2.threshold(cell, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    _, clean_bin = cv2.threshold(cleaned, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+    orig_ink = int(orig_bin.sum()) // 255
+    clean_ink = int(clean_bin.sum()) // 255
+
+    # The clue number ink should be removed (fewer ink pixels)
+    assert clean_ink < orig_ink
+
+    # The letter (largest blob) should survive — most ink is preserved
+    assert clean_ink > orig_ink * 0.5
+
+    # No ink should remain in the top-left corner area
+    h, w = cleaned.shape[:2]
+    corner = clean_bin[: h // 3, : w // 3]
+    assert corner.sum() == 0
 
 
 def test_mock_classifiers_satisfy_protocol() -> None:
