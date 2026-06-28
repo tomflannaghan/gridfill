@@ -136,6 +136,7 @@ def read_grid(
     source: ImageSource,
     classifier: LetterClassifier | None = None,
     debug_dir: str | os.PathLike[str] | None = None,
+    grid_index: int | None = None,
 ) -> Grid:
     """Transcribe a filled crossword scan into a :class:`Grid`.
 
@@ -152,7 +153,7 @@ def read_grid(
 
     image = load_image(source)
     gray = to_grayscale(image)
-    detected = detect_grid(binarize(gray))
+    detected = detect_grid(binarize(gray), grid_index=grid_index)
     boxes = infer_cell_boxes(detected.line_mask)
     rectified = cv2.warpPerspective(gray, detected.transform, detected.size)
     rectified_bgr = cv2.warpPerspective(image, detected.transform, detected.size)

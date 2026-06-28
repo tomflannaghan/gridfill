@@ -22,6 +22,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="PATH",
         help="Save grid data (letters, colours, confidences) to a CSV file.",
     )
+    p_read.add_argument(
+        "--grid",
+        type=int,
+        metavar="INDEX",
+        help="1-based index of the grid to use when the image contains multiple grids.",
+    )
 
     p_edit = sub.add_parser("edit", help="Interactively edit a grid overlaid on its image.")
     p_edit.add_argument("image", help="Path to the grid image.")
@@ -38,6 +44,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         metavar="THRESH",
         help="Highlight cells with confidence below this threshold.",
     )
+    p_edit.add_argument(
+        "--grid",
+        type=int,
+        metavar="INDEX",
+        help="1-based index of the grid to use when the image contains multiple grids.",
+    )
 
     p_write = sub.add_parser("write", help="Write letters into an empty grid image.")
     p_write.add_argument("image", help="Path to the empty-grid image.")
@@ -50,6 +62,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=float,
         metavar="THRESH",
         help="Highlight cells with confidence below this threshold.",
+    )
+    p_write.add_argument(
+        "--grid",
+        type=int,
+        metavar="INDEX",
+        help="1-based index of the grid to use when the image contains multiple grids.",
     )
 
     args = parser.parse_args(argv)
@@ -64,7 +82,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             classifier = CnnLetterClassifier(args.model)
 
-        grid = read_grid(args.image, classifier=classifier, debug_dir=args.debug_dir)
+        grid = read_grid(
+            args.image, classifier=classifier, debug_dir=args.debug_dir, grid_index=args.grid
+        )
         for row in grid.to_letters():
             print("".join((c if c else ".") if c is not None else "#" for c in row))
 
@@ -87,6 +107,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             out_path=args.out,
             font_path=args.font,
             highlight_confidence=args.highlight_confidence,
+            grid_index=args.grid,
         )
         return 0
 
@@ -106,6 +127,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             letters,
             out_path=args.out,
             highlight_confidence=args.highlight_confidence,
+            grid_index=args.grid,
         )
         return 0
 

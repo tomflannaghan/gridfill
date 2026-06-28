@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from collections.abc import Callable
 
@@ -69,3 +70,34 @@ def fit_font_size(
     if glyph_w > max_width_ratio * cell_width:
         size = max(8, int(size * (max_width_ratio * cell_width) / glyph_w))
     return size
+
+
+def _best_grid(n: int, cell_width: int, cell_height: int) -> tuple[int, int]:
+    """Choose rows x cols to arrange *n* characters with the best aspect ratio."""
+    best: tuple[int, int] = (n, 1)
+    best_waste = float("inf")
+    for ncols in range(1, n + 1):
+        nrows = math.ceil(n / ncols)
+        char_w = cell_width / ncols
+        char_h = cell_height / nrows
+        aspect = min(char_w, char_h) / max(char_w, char_h)
+        waste = nrows * ncols - n
+        score = -aspect + waste * 0.1
+        if score < best_waste:
+            best_waste = score
+            best = (nrows, ncols)
+    return best
+
+
+def fit_font_size_multi(
+    loader: Callable[[int], FontT],
+    cell_width: int,
+    cell_height: int,
+    nrows: int,
+    ncols: int,
+    margin: float = 0.85,
+) -> int:
+    """Pick a font size so characters arranged in *nrows* x *ncols* fit the cell."""
+    slot_w = cell_width / ncols
+    slot_h = cell_height / nrows
+    return fit_font_size(loader, int(slot_w), int(slot_h), max_width_ratio=margin)

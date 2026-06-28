@@ -6,17 +6,17 @@ import os
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from .detection import detect_grid
-from .fonts import fit_font_size, font_loader
+from .fonts import _best_grid, fit_font_size, fit_font_size_multi, font_loader
 from .io import ImageSource, load_image, save_image
 from .preprocess import binarize, to_grayscale
 from .segmentation import infer_cell_boxes
 from .types import CellKind, Grid, LetterGrid
 
 _HIGHLIGHT_BGR = (50, 50, 255)
-_BG_MARGIN_DIVISOR = 6
+_WHITE_DISTANCE_THRESHOLD = 30
 
 
 def write_grid(
@@ -26,6 +26,7 @@ def write_grid(
     font_path: str | os.PathLike[str] | None = None,
     color: tuple[int, int, int] = (0, 0, 0),
     highlight_confidence: float | None = None,
+    grid_index: int | None = None,
 ) -> np.ndarray:
     """Render ``letters`` into the cells of an empty grid image.
 
@@ -44,7 +45,7 @@ def write_grid(
     ``None`` (block) and ``""`` (empty) cells are left untouched.
     """
     image = load_image(source).copy()
-    detected = detect_grid(binarize(to_grayscale(image)))
+    detected = detect_grid(binarize(to_grayscale(image)), grid_index=grid_index)
     boxes = infer_cell_boxes(detected.line_mask)
 
     if isinstance(letters, Grid):
@@ -65,6 +66,7 @@ def write_grid(
 
     # --- Background layer (only when a Grid with metadata is supplied) ---
     if grid is not None:
+        line_mask_bool = detected.line_mask > 0
         bg_layer = np.zeros((height, width, 3), dtype=np.uint8)
         bg_mask = np.zeros((height, width), dtype=np.uint8)
 
@@ -83,14 +85,15 @@ def write_grid(
                     bg = cell.background
                 if bg is None:
                     continue
+                if bg != _HIGHLIGHT_BGR:
+                    dist = sum((a - 255) ** 2 for a in bg)
+                    if dist < _WHITE_DISTANCE_THRESHOLD**2:
+                        continue
 
-                margin = max(2, min(box.width, box.height) // _BG_MARGIN_DIVISOR)
-                x1 = box.x + margin
-                y1 = box.y + margin
-                x2 = box.x2 - margin
-                y2 = box.y2 - margin
-                bg_layer[y1:y2, x1:x2] = bg
-                bg_mask[y1:y2, x1:x2] = 255
+                bg_layer[box.y : box.y2, box.x : box.x2] = bg
+                bg_mask[box.y : box.y2, box.x : box.x2] = 255
+
+        bg_mask[line_mask_bool] = 0
 
         if bg_mask.any():
             warped_bg = cv2.warpPerspective(bg_layer, inverse, (src_w, src_h))
@@ -108,15 +111,38 @@ def write_grid(
 
     loader = font_loader(font_path)
     sample = boxes[0][0]
-    font = loader(fit_font_size(loader, sample.width, sample.height))
+    single_font = loader(fit_font_size(loader, sample.width, sample.height))
+
+    multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont] = {}
+
+    for lr in letter_grid:
+        for lv in lr:
+            if lv and len(lv) > 1:
+                gr = _best_grid(len(lv), sample.width, sample.height)
+                if gr not in multi_font_cache:
+                    sz = fit_font_size_multi(loader, sample.width, sample.height, gr[0], gr[1])
+                    multi_font_cache[gr] = loader(sz)
 
     for row, letter_row in zip(boxes, letter_grid, strict=True):
         for box, letter in zip(row, letter_row, strict=True):
             if not letter:  # None (block) or "" (empty)
                 continue
-            cx = box.x + box.width / 2
-            cy = box.y + box.height / 2
-            draw.text((cx, cy), letter.upper(), font=font, fill=255, anchor="mm")
+            text = letter.upper()
+            if len(text) == 1:
+                cx = box.x + box.width / 2
+                cy = box.y + box.height / 2
+                draw.text((cx, cy), text, font=single_font, fill=255, anchor="mm")
+            else:
+                nrows, ncols = _best_grid(len(text), box.width, box.height)
+                font = multi_font_cache[(nrows, ncols)]
+                slot_w = box.width / ncols
+                slot_h = box.height / nrows
+                for i, ch in enumerate(text):
+                    r = i // ncols
+                    c = i % ncols
+                    cx = box.x + (c + 0.5) * slot_w
+                    cy = box.y + (r + 0.5) * slot_h
+                    draw.text((cx, cy), ch, font=font, fill=255, anchor="mm")
 
     warped = cv2.warpPerspective(np.array(mask), inverse, (src_w, src_h))
     alpha = (warped.astype(np.float32) / 255.0)[:, :, None]

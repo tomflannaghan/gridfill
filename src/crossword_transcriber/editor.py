@@ -30,6 +30,7 @@ def edit_grid(
     font_path: str | os.PathLike[str] | None = None,
     color: tuple[int, int, int] = (0, 0, 0),
     highlight_confidence: float | None = None,
+    grid_index: int | None = None,
 ) -> Grid:
     """Open an interactive editor for the grid overlaid on *source*.
 
@@ -39,7 +40,7 @@ def edit_grid(
     Returns the edited :class:`Grid` when the window is closed.
     """
     image = load_image(source).copy()
-    detected = detect_grid(binarize(to_grayscale(image)))
+    detected = detect_grid(binarize(to_grayscale(image)), grid_index=grid_index)
     boxes = infer_cell_boxes(detected.line_mask)
     rows, cols = len(boxes), len(boxes[0])
 
@@ -280,9 +281,7 @@ class _GridEditor(tk.Tk):
         rgb = cv2.cvtColor(rendered, cv2.COLOR_BGR2RGB)
         pil_img = Image.fromarray(rgb)
         if (self._display_w, self._display_h) != (pil_img.width, pil_img.height):
-            pil_img = pil_img.resize(
-                (self._display_w, self._display_h), Image.Resampling.LANCZOS
-            )
+            pil_img = pil_img.resize((self._display_w, self._display_h), Image.Resampling.LANCZOS)
         self._photo = ImageTk.PhotoImage(pil_img)
         self._canvas.itemconfig(self._canvas_image, image=self._photo)
 
@@ -409,4 +408,3 @@ class _GridEditor(tk.Tk):
 
     def _on_close(self) -> None:
         self.destroy()
-

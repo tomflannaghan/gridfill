@@ -8,6 +8,7 @@ Public API:
 from __future__ import annotations
 
 from .editor import edit_grid
+from .errors import MultipleGridsError
 from .reader import read_grid
 from .types import BoundingBox, Cell, CellKind, Grid, LetterGrid
 from .writer import write_grid
@@ -23,4 +24,5 @@ __all__ = [
     "CellKind",
     "BoundingBox",
     "LetterGrid",
+    "MultipleGridsError",
 ]

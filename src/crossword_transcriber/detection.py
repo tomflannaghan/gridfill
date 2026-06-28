@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from .errors import GridDetectionError
+from .errors import GridDetectionError, MultipleGridsError
 
 
 @dataclass
@@ -54,36 +54,60 @@ def _order_corners(pts: np.ndarray) -> np.ndarray:
     return rect
 
 
-def _grid_quad(line_mask: np.ndarray) -> np.ndarray:
-    """Find the four corners of the grid lattice's outer boundary."""
-    contours, _ = cv2.findContours(line_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
-        raise GridDetectionError("No line structure found in image")
+_MIN_AREA_RATIO = 0.10
+_ROW_BAND_FRAC = 0.10
 
-    contour = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(contour) <= 0:
-        raise GridDetectionError("Largest line contour has no area")
 
+def _contour_to_quad(contour: np.ndarray) -> np.ndarray:
+    """Approximate a contour as an ordered 4-corner quad."""
     peri = cv2.arcLength(contour, True)
     approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
     if len(approx) == 4:
         quad = approx.reshape(4, 2).astype(np.float32)
     else:
-        # Fall back to the minimum-area rectangle when the contour is not a clean
-        # quadrilateral (e.g. rounded or noisy corners).
         quad = cv2.boxPoints(cv2.minAreaRect(contour)).astype(np.float32)
     return _order_corners(quad)
 
 
-def detect_grid(binary: np.ndarray) -> DetectedGrid:
-    """Locate the crossword lattice on the page and rectify it.
+def _find_grid_quads(line_mask: np.ndarray) -> list[np.ndarray]:
+    """Find quads for all grid lattices, sorted in reading order."""
+    contours, _ = cv2.findContours(line_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        raise GridDetectionError("No line structure found in image")
 
-    Extracts the line lattice, finds its outer quad, and warps it to an
-    axis-aligned crop. The returned transform/size let callers warp other layers
-    (e.g. the grayscale image) into the same rectified frame.
-    """
-    line_mask = extract_line_mask(binary)
-    quad = _grid_quad(line_mask)
+    areas = [cv2.contourArea(c) for c in contours]
+    max_area = max(areas)
+    if max_area <= 0:
+        raise GridDetectionError("Largest line contour has no area")
+
+    min_area = max_area * _MIN_AREA_RATIO
+    h = line_mask.shape[0]
+
+    quads: list[tuple[float, float, np.ndarray]] = []
+    for contour, area in zip(contours, areas, strict=True):
+        if area < min_area:
+            continue
+        quad = _contour_to_quad(contour)
+        cx = float(quad[:, 0].mean())
+        cy = float(quad[:, 1].mean())
+        quads.append((cy, cx, quad))
+
+    row_band = h * _ROW_BAND_FRAC
+    quads.sort(key=lambda t: (t[0], t[1]))
+    rows: list[list[tuple[float, float, np.ndarray]]] = []
+    for item in quads:
+        if rows and abs(item[0] - rows[-1][0][0]) < row_band:
+            rows[-1].append(item)
+        else:
+            rows.append([item])
+    for row in rows:
+        row.sort(key=lambda t: t[1])
+
+    return [quad for row in rows for _, _, quad in row]
+
+
+def _rectify_quad(line_mask: np.ndarray, quad: np.ndarray) -> DetectedGrid:
+    """Compute a perspective-rectified DetectedGrid from a single quad."""
     top_left, top_right, bottom_right, bottom_left = quad
 
     width = int(
@@ -112,3 +136,34 @@ def detect_grid(binary: np.ndarray) -> DetectedGrid:
     transform = cv2.getPerspectiveTransform(quad, dst)
     rectified = cv2.warpPerspective(line_mask, transform, (width, height))
     return DetectedGrid(line_mask=rectified, transform=transform, size=(width, height))
+
+
+def detect_grids(binary: np.ndarray) -> list[DetectedGrid]:
+    """Detect all crossword grids in the image, sorted in reading order."""
+    line_mask = extract_line_mask(binary)
+    quads = _find_grid_quads(line_mask)
+    return [_rectify_quad(line_mask, quad) for quad in quads]
+
+
+def detect_grid(binary: np.ndarray, grid_index: int | None = None) -> DetectedGrid:
+    """Locate a crossword lattice on the page and rectify it.
+
+    When the image contains multiple grids, *grid_index* (1-based, reading
+    left-to-right then top-to-bottom) selects which grid to return. If the
+    image contains a single grid, *grid_index* may be omitted.
+
+    Raises :class:`MultipleGridsError` when multiple grids are found and no
+    *grid_index* is given.
+    """
+    grids = detect_grids(binary)
+
+    if grid_index is None:
+        if len(grids) == 1:
+            return grids[0]
+        raise MultipleGridsError(len(grids))
+
+    if grid_index < 1 or grid_index > len(grids):
+        raise GridDetectionError(
+            f"grid_index {grid_index} out of range; image has {len(grids)} grid(s)"
+        )
+    return grids[grid_index - 1]
