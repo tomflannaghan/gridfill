@@ -20,7 +20,7 @@ from .types import Cell, CellKind, Grid
 _LINE_INK_THRESHOLD = 0.75
 _MAX_SCAN_DIVISOR = 4
 _BG_PERCENTILE = 85
-_BG_BRIGHT_FLOOR = 128
+_BG_WHITE_FLOOR = 220
 _BG_MARGIN_DIVISOR = 6
 
 
@@ -93,13 +93,27 @@ def _remove_corner_clue(gray: np.ndarray) -> np.ndarray:
     return result
 
 
-def _normalize_background(gray: np.ndarray) -> np.ndarray:
-    """Shift cell background to white so shaded cells match EMNIST expectations."""
-    bg = float(np.percentile(gray, _BG_PERCENTILE))
-    if bg >= _BG_BRIGHT_FLOOR:
+def _normalize_background(
+    gray: np.ndarray,
+    bgr_cell: np.ndarray,
+    bg_color: tuple[int, int, int],
+) -> np.ndarray:
+    """White out background pixels by colour distance from the sampled background.
+
+    Computes per-pixel Euclidean distance in BGR space and uses Otsu's method
+    on the distance image to separate background from ink.
+    """
+    bg = np.array(bg_color, dtype=np.float32)
+    if bg.min() >= _BG_WHITE_FLOOR:
         return gray
-    shifted = gray.astype(np.float32) + (255.0 - bg)
-    return np.asarray(np.clip(shifted, 0, 255).astype(np.uint8))
+
+    dist = np.sqrt(((bgr_cell.astype(np.float32) - bg) ** 2).sum(axis=2))
+    dist_u8 = np.clip(dist, 0, 255).astype(np.uint8)
+    otsu_thresh, _ = cv2.threshold(dist_u8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    result = gray.copy()
+    result[dist < otsu_thresh] = 255
+    return result
 
 
 def _sample_background(bgr_cell: np.ndarray) -> tuple[int, int, int]:
@@ -156,12 +170,16 @@ def read_grid(
             confidence = None
 
             if kind is CellKind.LETTER and classifier is not None:
-                clean = _remove_corner_clue(_normalize_background(_strip_border_lines(cell_gray)))
+                assert background is not None
+                clean = _normalize_background(cell_gray, cell_bgr, background)
+                clean = _strip_border_lines(clean)
+                clean = _remove_corner_clue(clean)
                 prediction = classifier.predict(clean)
                 letter = prediction.letter
                 confidence = prediction.confidence
                 if debug_dir is not None:
                     tag = f"R{r}_C{c}_{prediction.letter}"
+                    cv2.imwrite(str(Path(debug_dir) / f"{tag}_raw.png"), cell_bgr)
                     cv2.imwrite(str(Path(debug_dir) / f"{tag}.png"), clean)
                     cv2.imwrite(
                         str(Path(debug_dir) / f"{tag}_prep.png"),

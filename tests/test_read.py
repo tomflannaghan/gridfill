@@ -184,6 +184,29 @@ def test_remove_corner_clue_number() -> None:
     assert corner.sum() == 0
 
 
+def test_normalize_shaded_background_preserves_ink() -> None:
+    """Coloured background should be whitened without destroying letter ink."""
+    from crossword_transcriber.reader import _normalize_background, _sample_background
+
+    cell_bgr = cv2.imread(str(FIXTURES / "raw_shaded_cell.png"))
+    cell_gray = cv2.cvtColor(cell_bgr, cv2.COLOR_BGR2GRAY)
+    bg = _sample_background(cell_bgr)
+
+    result = _normalize_background(cell_gray, cell_bgr, bg)
+
+    _, orig_bin = cv2.threshold(cell_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    _, clean_bin = cv2.threshold(result, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    orig_ink = int(orig_bin.sum()) // 255
+    clean_ink = int(clean_bin.sum()) // 255
+
+    # Most letter ink should survive
+    assert clean_ink > orig_ink * 0.7
+
+    # Background should be mostly white now
+    bg_pixels = result[clean_bin == 0]
+    assert bg_pixels.mean() > 240
+
+
 def test_mock_classifiers_satisfy_protocol() -> None:
     assert isinstance(MockClassifier(), LetterClassifier)
     assert isinstance(SequenceClassifier("A"), LetterClassifier)
