@@ -301,7 +301,7 @@ class _GridEditor(tk.Tk):
     # Rendering
     # ------------------------------------------------------------------
 
-    def _render(self) -> np.ndarray:
+    def _render(self, *, for_save: bool = False) -> np.ndarray:
         src_w, src_h = self._src_size
         fill = np.array(self._color, dtype=np.float32).reshape(1, 1, 3)
         result_f = self._base_image.astype(np.float32)
@@ -343,7 +343,8 @@ class _GridEditor(tk.Tk):
                             anchor="mm",
                         )
                     else:
-                        nrows, ncols = _best_grid(len(text), box.width, box.height)
+                        ref = gs.boxes[0][0]
+                        nrows, ncols = _best_grid(len(text), ref.width, ref.height)
                         font = gs.multi_font_cache[(nrows, ncols)]
                         slot_w = box.width / ncols
                         slot_h = box.height / nrows
@@ -367,7 +368,7 @@ class _GridEditor(tk.Tk):
         result = np.asarray(result_f.round().astype(np.uint8))
 
         # Active grid indicator
-        if self._active_grid_index is not None and len(self._grid_states) > 1:
+        if not for_save and self._active_grid_index is not None and len(self._grid_states) > 1:
             gs = self._grid_states[self._active_grid_index]
             rect_w, rect_h = gs.detected.size
             corners = np.array(
@@ -378,7 +379,7 @@ class _GridEditor(tk.Tk):
             cv2.polylines(result, [src_corners], True, _ACTIVE_GRID_BGR, 3)
 
         # Cell selection highlight
-        if self._selected is not None and self._active_grid_index is not None:
+        if not for_save and self._selected is not None and self._active_grid_index is not None:
             gs = self._grid_states[self._active_grid_index]
             r, c = self._selected
             box = gs.boxes[r][c]
@@ -632,7 +633,7 @@ class _GridEditor(tk.Tk):
             )
         if not path:
             return
-        rendered = self._render()
+        rendered = self._render(for_save=True)
         save_image(path, rendered)
         self._out_path = path
         self.title(f"Crossword Grid Editor — saved {os.path.basename(str(path))}")
