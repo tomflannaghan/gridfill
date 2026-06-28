@@ -23,6 +23,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Save grid data (letters, colours, confidences) to a CSV file.",
     )
 
+    p_edit = sub.add_parser("edit", help="Interactively edit a grid overlaid on its image.")
+    p_edit.add_argument("image", help="Path to the grid image.")
+    p_edit.add_argument(
+        "--csv",
+        metavar="PATH",
+        help="Load initial cell data from a CSV file (from read --csv).",
+    )
+    p_edit.add_argument("-o", "--out", help="Default output path for saving the rendered image.")
+    p_edit.add_argument("--font", help="Path to a TrueType font file.")
+    p_edit.add_argument(
+        "--highlight-confidence",
+        type=float,
+        metavar="THRESH",
+        help="Highlight cells with confidence below this threshold.",
+    )
+
     p_write = sub.add_parser("write", help="Write letters into an empty grid image.")
     p_write.add_argument("image", help="Path to the empty-grid image.")
     p_write.add_argument(
@@ -55,6 +71,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.csv:
             grid.save_csv(args.csv)
 
+        return 0
+
+    if args.command == "edit":
+        from .editor import edit_grid
+        from .types import Grid
+
+        edit_input: Grid | None = None
+        if args.csv:
+            edit_input = Grid.load_csv(args.csv)
+
+        edit_grid(
+            args.image,
+            edit_input,
+            out_path=args.out,
+            font_path=args.font,
+            highlight_confidence=args.highlight_confidence,
+        )
         return 0
 
     if args.command == "write":

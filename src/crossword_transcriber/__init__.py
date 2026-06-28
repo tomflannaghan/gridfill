@@ -7,6 +7,7 @@ Public API:
 
 from __future__ import annotations
 
+from .editor import edit_grid
 from .reader import read_grid
 from .types import BoundingBox, Cell, CellKind, Grid, LetterGrid
 from .writer import write_grid
@@ -16,6 +17,7 @@ __version__ = "0.1.0"
 __all__ = [
     "read_grid",
     "write_grid",
+    "edit_grid",
     "Grid",
     "Cell",
     "CellKind",
