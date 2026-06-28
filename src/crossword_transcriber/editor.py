@@ -143,6 +143,7 @@ class _GridEditor(tk.Tk):
         self._scale = scale
 
         self._selected: tuple[int, int] | None = None
+        self._multi_entry = False
 
         self._canvas = tk.Canvas(self, width=self._display_w, height=self._display_h)
         self._canvas.pack()
@@ -150,6 +151,7 @@ class _GridEditor(tk.Tk):
         self._canvas_image = self._canvas.create_image(0, 0, anchor=tk.NW)
 
         self._canvas.bind("<Button-1>", self._on_click)
+        self._canvas.bind("<Double-Button-1>", self._on_double_click)
         self.bind("<Key>", self._on_key)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -276,7 +278,8 @@ class _GridEditor(tk.Tk):
                 dtype=np.float32,
             )
             src_corners = cv2.perspectiveTransform(corners, self._inverse)[0].astype(np.int32)
-            cv2.polylines(result, [src_corners], True, _SELECTION_BGR, 3)
+            thickness = 5 if self._multi_entry else 3
+            cv2.polylines(result, [src_corners], True, _SELECTION_BGR, thickness)
 
         return result
 
@@ -305,17 +308,43 @@ class _GridEditor(tk.Tk):
             cell = self.grid_model.cells[hit[0]][hit[1]]
             if cell.kind is CellKind.BLOCK:
                 return
+        self._multi_entry = False
         self._selected = hit
+        self._render_and_display()
+
+    def _on_double_click(self, event: tk.Event[tk.Canvas]) -> None:
+        hit = click_to_cell(
+            event.x,
+            event.y,
+            self._scale,
+            self._detected.transform,
+            self._boxes,
+        )
+        if hit is None:
+            return
+        cell = self.grid_model.cells[hit[0]][hit[1]]
+        if cell.kind is CellKind.BLOCK:
+            return
+        self._selected = hit
+        self._multi_entry = True
         self._render_and_display()
 
     def _on_key(self, event: tk.Event[tk.Misc]) -> None:
         if event.keysym == "Escape":
-            self._selected = None
-            self._render_and_display()
+            if self._multi_entry:
+                self._multi_entry = False
+                self._render_and_display()
+            else:
+                self._selected = None
+                self._render_and_display()
             return
 
         if event.keysym == "Return":
-            self._on_close()
+            if self._multi_entry:
+                self._multi_entry = False
+                self._render_and_display()
+            else:
+                self._on_close()
             return
 
         state = event.state if isinstance(event.state, int) else 0
@@ -342,24 +371,32 @@ class _GridEditor(tk.Tk):
         r, c = self._selected
 
         if event.keysym in ("Up", "Down", "Left", "Right"):
+            self._multi_entry = False
             self._move_selection(event.keysym)
             return
 
         if event.keysym in ("BackSpace", "Delete"):
             cell = self.grid_model.cells[r][c]
-            cell.letter = None
-            cell.kind = CellKind.EMPTY
-            cell.confidence = None
+            if self._multi_entry and cell.letter and len(cell.letter) > 1:
+                cell.letter = cell.letter[:-1]
+            else:
+                cell.letter = None
+                cell.kind = CellKind.EMPTY
+                cell.confidence = None
             self._render_and_display()
             return
 
         ch = event.char.upper()
-        if ch and ch.isalpha() and len(ch) == 1:
+        if ch and ch.isalnum() and len(ch) == 1:
             cell = self.grid_model.cells[r][c]
-            cell.letter = ch
+            if self._multi_entry:
+                cell.letter = (cell.letter or "") + ch
+            else:
+                cell.letter = ch
             cell.kind = CellKind.LETTER
             cell.confidence = None
-            self._advance_selection()
+            if not self._multi_entry:
+                self._advance_selection()
             self._render_and_display()
 
     def _move_selection(self, direction: str) -> None:
@@ -420,8 +457,11 @@ class _GridEditor(tk.Tk):
 
     def _recompute_base(self) -> None:
         self._base_image = self._compute_base_image(
-            self._image, self._detected, self._boxes,
-            self.grid_model, self._highlight_confidence,
+            self._image,
+            self._detected,
+            self._boxes,
+            self.grid_model,
+            self._highlight_confidence,
         )
 
     # ------------------------------------------------------------------
