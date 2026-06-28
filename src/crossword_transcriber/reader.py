@@ -17,8 +17,10 @@ from .recognize.cnn import preprocess_cell
 from .segmentation import infer_cell_boxes
 from .types import CellKind, LetterGrid
 
-_LINE_INK_THRESHOLD = 0.4
-_MAX_SCAN_DIVISOR = 6
+_LINE_INK_THRESHOLD = 0.75
+_MAX_SCAN_DIVISOR = 4
+_BG_PERCENTILE = 85
+_BG_BRIGHT_FLOOR = 128
 
 
 def _strip_border_lines(gray: np.ndarray) -> np.ndarray:
@@ -26,33 +28,42 @@ def _strip_border_lines(gray: np.ndarray) -> np.ndarray:
     h, w = gray.shape[:2]
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     result = gray.copy()
-    max_scan = max(2, min(h, w) // _MAX_SCAN_DIVISOR)
+    max_scan = max(3, min(h, w) // _MAX_SCAN_DIVISOR)
 
     for r in range(max_scan):
-        if binary[r].mean() / 255 > _LINE_INK_THRESHOLD:
+        if gray[r].mean() / 255 < _LINE_INK_THRESHOLD:
             result[r, :] = 255
         else:
             break
 
     for r in range(h - 1, h - 1 - max_scan, -1):
-        if binary[r].mean() / 255 > _LINE_INK_THRESHOLD:
+        if gray[r].mean() / 255 < _LINE_INK_THRESHOLD:
             result[r, :] = 255
         else:
             break
 
     for c in range(max_scan):
-        if binary[:, c].mean() / 255 > _LINE_INK_THRESHOLD:
+        if gray[:, c].mean() / 255 < _LINE_INK_THRESHOLD:
             result[:, c] = 255
         else:
             break
 
     for c in range(w - 1, w - 1 - max_scan, -1):
-        if binary[:, c].mean() / 255 > _LINE_INK_THRESHOLD:
+        if gray[:, c].mean() / 255 < _LINE_INK_THRESHOLD:
             result[:, c] = 255
         else:
             break
 
     return result
+
+
+def _normalize_background(gray: np.ndarray) -> np.ndarray:
+    """Shift cell background to white so shaded cells match EMNIST expectations."""
+    bg = float(np.percentile(gray, _BG_PERCENTILE))
+    if bg >= _BG_BRIGHT_FLOOR:
+        return gray
+    shifted = gray.astype(np.float32) + (255.0 - bg)
+    return np.asarray(np.clip(shifted, 0, 255).astype(np.uint8))
 
 
 def read_grid(
@@ -88,7 +99,7 @@ def read_grid(
             if kind is CellKind.BLOCK:
                 row.append(None)
             elif kind is CellKind.LETTER and classifier is not None:
-                clean = _strip_border_lines(cell)
+                clean = _normalize_background(_strip_border_lines(cell))
                 prediction = classifier.predict(clean)
                 row.append(prediction.letter)
                 if debug_dir is not None:
