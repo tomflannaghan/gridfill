@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import tkinter as tk
+import tkinter.colorchooser
 import tkinter.filedialog
 
 import cv2
@@ -19,6 +20,7 @@ from .types import BoundingBox, Cell, CellKind, Grid
 
 _SELECTION_BGR = (255, 180, 0)
 _HIGHLIGHT_BGR = (50, 50, 255)
+_DEFAULT_HIGHLIGHT_COLOR_BGR = (0, 255, 255)
 _WHITE_DISTANCE_THRESHOLD = 30
 _MAX_DISPLAY_SIZE = 900
 
@@ -117,7 +119,9 @@ class _GridEditor(tk.Tk):
         self._boxes = boxes
         self._color = color
         self._highlight_confidence = highlight_confidence
+        self._highlight_color = _DEFAULT_HIGHLIGHT_COLOR_BGR
         self._out_path = out_path
+        self._image = image
 
         self._inverse = np.linalg.inv(detected.transform)
         src_h, src_w = image.shape[:2]
@@ -325,6 +329,13 @@ class _GridEditor(tk.Tk):
                 self._save_image()
             return
 
+        if ctrl and event.keysym.lower() == "h":
+            if shift:
+                self._pick_highlight_color()
+            else:
+                self._toggle_highlight()
+            return
+
         if self._selected is None:
             return
 
@@ -377,6 +388,41 @@ class _GridEditor(tk.Tk):
             if self.grid_model.cells[r][c].kind is not CellKind.BLOCK:
                 self._selected = (r, c)
                 return
+
+    # ------------------------------------------------------------------
+    # Highlighting
+    # ------------------------------------------------------------------
+
+    def _toggle_highlight(self) -> None:
+        if self._selected is None:
+            return
+        r, c = self._selected
+        cell = self.grid_model.cells[r][c]
+        if cell.kind is CellKind.BLOCK:
+            return
+        if cell.background == self._highlight_color:
+            cell.background = None
+        else:
+            cell.background = self._highlight_color
+        self._recompute_base()
+        self._render_and_display()
+
+    def _pick_highlight_color(self) -> None:
+        b, g, r = self._highlight_color
+        result = tk.colorchooser.askcolor(
+            color=f"#{r:02x}{g:02x}{b:02x}",
+            title="Pick highlight colour",
+        )
+        if result[0] is None:
+            return
+        rgb = result[0]
+        self._highlight_color = (int(rgb[2]), int(rgb[1]), int(rgb[0]))
+
+    def _recompute_base(self) -> None:
+        self._base_image = self._compute_base_image(
+            self._image, self._detected, self._boxes,
+            self.grid_model, self._highlight_confidence,
+        )
 
     # ------------------------------------------------------------------
     # Save
