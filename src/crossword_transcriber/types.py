@@ -48,6 +48,7 @@ class Cell:
     kind: CellKind = CellKind.EMPTY
     letter: str | None = None
     confidence: float | None = None
+    background: tuple[int, int, int] | None = None
 
 
 @dataclass
@@ -80,7 +81,7 @@ class Grid:
                 elif cell.kind is CellKind.EMPTY:
                     out_row.append("")
                 else:
-                    out_row.append(cell.letter)
+                    out_row.append(cell.letter or "")
             out.append(out_row)
         return out
 

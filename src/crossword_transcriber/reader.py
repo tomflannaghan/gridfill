@@ -15,12 +15,13 @@ from .preprocess import binarize, to_grayscale
 from .recognize import LetterClassifier
 from .recognize.cnn import preprocess_cell
 from .segmentation import infer_cell_boxes
-from .types import CellKind, LetterGrid
+from .types import Cell, CellKind, Grid
 
 _LINE_INK_THRESHOLD = 0.75
 _MAX_SCAN_DIVISOR = 4
 _BG_PERCENTILE = 85
 _BG_BRIGHT_FLOOR = 128
+_BG_MARGIN_DIVISOR = 6
 
 
 def _strip_border_lines(gray: np.ndarray) -> np.ndarray:
@@ -101,15 +102,32 @@ def _normalize_background(gray: np.ndarray) -> np.ndarray:
     return np.asarray(np.clip(shifted, 0, 255).astype(np.uint8))
 
 
+def _sample_background(bgr_cell: np.ndarray) -> tuple[int, int, int]:
+    """Sample the dominant background BGR color of a cell interior."""
+    h, w = bgr_cell.shape[:2]
+    margin = max(2, min(h, w) // _BG_MARGIN_DIVISOR)
+    inner = bgr_cell[margin : h - margin, margin : w - margin]
+    if inner.size == 0:
+        return (255, 255, 255)
+    if inner.ndim == 3:
+        b = int(np.percentile(inner[:, :, 0], _BG_PERCENTILE))
+        g = int(np.percentile(inner[:, :, 1], _BG_PERCENTILE))
+        r = int(np.percentile(inner[:, :, 2], _BG_PERCENTILE))
+        return (b, g, r)
+    v = int(np.percentile(inner, _BG_PERCENTILE))
+    return (v, v, v)
+
+
 def read_grid(
     source: ImageSource,
     classifier: LetterClassifier | None = None,
     debug_dir: str | os.PathLike[str] | None = None,
-) -> LetterGrid:
-    """Transcribe a filled crossword scan into a list-of-lists of letters.
+) -> Grid:
+    """Transcribe a filled crossword scan into a :class:`Grid`.
 
-    ``None`` marks a block cell, ``""`` an empty white cell (or a letter cell
-    when no *classifier* is provided), and ``"A".."Z"`` a recognised letter.
+    Each cell carries the recognised letter, classifier confidence, and the
+    sampled background colour (BGR).  Use :meth:`Grid.to_letters` to obtain the
+    simple ``list[list[str | None]]`` format.
 
     If *debug_dir* is set, saves each cell's inner crop and its preprocessed
     28x28 image to that directory, named ``R{row}_C{col}_{letter}.png`` and
@@ -123,20 +141,25 @@ def read_grid(
     detected = detect_grid(binarize(gray))
     boxes = infer_cell_boxes(detected.line_mask)
     rectified = cv2.warpPerspective(gray, detected.transform, detected.size)
+    rectified_bgr = cv2.warpPerspective(image, detected.transform, detected.size)
 
-    result: LetterGrid = []
+    cells: list[list[Cell]] = []
     for r, row_boxes in enumerate(boxes):
-        row: list[str | None] = []
+        row: list[Cell] = []
         for c, box in enumerate(row_boxes):
-            cell = rectified[box.y : box.y2, box.x : box.x2]
-            kind = classify_cell(cell)
+            cell_gray = rectified[box.y : box.y2, box.x : box.x2]
+            cell_bgr = rectified_bgr[box.y : box.y2, box.x : box.x2]
+            kind = classify_cell(cell_gray)
 
-            if kind is CellKind.BLOCK:
-                row.append(None)
-            elif kind is CellKind.LETTER and classifier is not None:
-                clean = _remove_corner_clue(_normalize_background(_strip_border_lines(cell)))
+            background = _sample_background(cell_bgr) if kind is not CellKind.BLOCK else None
+            letter = None
+            confidence = None
+
+            if kind is CellKind.LETTER and classifier is not None:
+                clean = _remove_corner_clue(_normalize_background(_strip_border_lines(cell_gray)))
                 prediction = classifier.predict(clean)
-                row.append(prediction.letter)
+                letter = prediction.letter
+                confidence = prediction.confidence
                 if debug_dir is not None:
                     tag = f"R{r}_C{c}_{prediction.letter}"
                     cv2.imwrite(str(Path(debug_dir) / f"{tag}.png"), clean)
@@ -144,7 +167,23 @@ def read_grid(
                         str(Path(debug_dir) / f"{tag}_prep.png"),
                         preprocess_cell(clean),
                     )
-            else:
-                row.append("")
-        result.append(row)
-    return result
+
+            row.append(
+                Cell(
+                    row=r,
+                    col=c,
+                    box=box,
+                    kind=kind,
+                    letter=letter,
+                    confidence=confidence,
+                    background=background,
+                )
+            )
+        cells.append(row)
+
+    return Grid(
+        rows=len(boxes),
+        cols=len(boxes[0]) if boxes else 0,
+        cells=cells,
+        transform=detected.transform,
+    )

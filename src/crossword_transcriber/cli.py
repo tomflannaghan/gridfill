@@ -36,7 +36,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             classifier = CnnLetterClassifier(args.model)
 
         grid = read_grid(args.image, classifier=classifier, debug_dir=args.debug_dir)
-        for row in grid:
+        for row in grid.to_letters():
             print("".join((c if c else ".") if c is not None else "#" for c in row))
         return 0
 

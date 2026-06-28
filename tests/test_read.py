@@ -9,6 +9,7 @@ import numpy as np
 
 from crossword_transcriber import read_grid, write_grid
 from crossword_transcriber.recognize import LetterClassifier, Prediction
+from crossword_transcriber.types import CellKind, Grid
 
 from .synthetic import make_grid
 
@@ -64,9 +65,11 @@ def test_round_trip_all_letters() -> None:
     clf = SequenceClassifier(seq)
     result = read_grid(written, classifier=clf)
 
-    assert len(result) == 3
-    assert all(len(row) == 3 for row in result)
-    flat = [c for row in result for c in row]
+    assert isinstance(result, Grid)
+    letter_grid = result.to_letters()
+    assert len(letter_grid) == 3
+    assert all(len(row) == 3 for row in letter_grid)
+    flat = [c for row in letter_grid for c in row]
     assert flat == list(seq)
     assert clf._idx == 9
 
@@ -80,11 +83,37 @@ def test_round_trip_with_empties() -> None:
     clf = MockClassifier("X")
     result = read_grid(written, classifier=clf)
 
-    assert result[0][0] == "X"
-    assert result[0][1] == ""
-    assert result[1][0] == ""
-    assert result[1][1] == "X"
+    letter_grid = result.to_letters()
+    assert letter_grid[0][0] == "X"
+    assert letter_grid[0][1] == ""
+    assert letter_grid[1][0] == ""
+    assert letter_grid[1][1] == "X"
     assert clf.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Grid metadata
+# ---------------------------------------------------------------------------
+
+
+def test_read_returns_grid_with_metadata() -> None:
+    """read_grid should return a Grid with background and confidence per cell."""
+    grid = make_grid(n_rows=2, n_cols=2, cell_px=60, pad=400, with_clutter=False)
+    letters = [["A", "B"], ["C", "D"]]
+    written = write_grid(grid.image, letters)
+
+    clf = MockClassifier("X")
+    result = read_grid(written, classifier=clf)
+
+    assert isinstance(result, Grid)
+    assert result.rows == 2
+    assert result.cols == 2
+    for row in result.cells:
+        for cell in row:
+            assert cell.background is not None
+            assert len(cell.background) == 3
+            if cell.kind is CellKind.LETTER:
+                assert cell.confidence is not None
 
 
 # ---------------------------------------------------------------------------
@@ -98,9 +127,10 @@ def test_read_without_classifier() -> None:
     written = write_grid(grid.image, [["A", "B"], ["C", "D"]])
 
     result = read_grid(written)
-    assert len(result) == 2
-    assert all(len(row) == 2 for row in result)
-    assert all(c == "" for row in result for c in row)
+    letter_grid = result.to_letters()
+    assert len(letter_grid) == 2
+    assert all(len(row) == 2 for row in letter_grid)
+    assert all(c == "" for row in letter_grid for c in row)
 
 
 # ---------------------------------------------------------------------------
@@ -111,9 +141,10 @@ def test_read_without_classifier() -> None:
 def test_read_fixture_dimensions() -> None:
     """read_grid on a real fixture should produce the correct grid shape."""
     result = read_grid(str(FIXTURES / "barred.png"))
-    assert len(result) == 12
-    assert all(len(row) == 12 for row in result)
-    assert all(c is not None for row in result for c in row)
+    letter_grid = result.to_letters()
+    assert len(letter_grid) == 12
+    assert all(len(row) == 12 for row in letter_grid)
+    assert all(c is not None for row in letter_grid for c in row)
 
 
 def test_read_barred_fixture_all_letter() -> None:
@@ -121,10 +152,11 @@ def test_read_barred_fixture_all_letter() -> None:
     clf = MockClassifier("X")
     result = read_grid(str(FIXTURES / "barred.png"), classifier=clf)
 
-    assert len(result) == 12
-    assert all(len(row) == 12 for row in result)
+    letter_grid = result.to_letters()
+    assert len(letter_grid) == 12
+    assert all(len(row) == 12 for row in letter_grid)
     assert clf.call_count == 144
-    assert all(c == "X" for row in result for c in row)
+    assert all(c == "X" for row in letter_grid for c in row)
 
 
 def test_remove_corner_clue_number() -> None:
