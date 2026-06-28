@@ -511,13 +511,22 @@ class _GridEditor(tk.Tk):
             self._move_selection(event.keysym)
             return
 
-        if event.keysym in ("BackSpace", "Delete"):
+        if event.keysym == "BackSpace":
             cell = gs.grid.cells[r][c]
             if self._multi_entry and cell.letter and len(cell.letter) > 1:
                 cell.letter = cell.letter[:-1]
-                self._render_and_display()
+            elif cell.kind is CellKind.LETTER:
+                cell.letter = None
+                cell.kind = CellKind.EMPTY
+                cell.confidence = None
             else:
+                self._retreat_selection()
                 self._clear_selected_cell()
+            self._render_and_display()
+            return
+
+        if event.keysym == "Delete":
+            self._clear_selected_cell()
             return
 
         ch = event.char.upper()
@@ -558,6 +567,23 @@ class _GridEditor(tk.Tk):
                 r += 1
             if r >= rows:
                 r = 0
+            if gs.grid.cells[r][c].kind is not CellKind.BLOCK:
+                self._selected = (r, c)
+                return
+
+    def _retreat_selection(self) -> None:
+        gs = self._active
+        if gs is None or self._selected is None:
+            return
+        r, c = self._selected
+        rows, cols = gs.grid.rows, gs.grid.cols
+        for _ in range(rows * cols):
+            c -= 1
+            if c < 0:
+                c = cols - 1
+                r -= 1
+            if r < 0:
+                r = rows - 1
             if gs.grid.cells[r][c].kind is not CellKind.BLOCK:
                 self._selected = (r, c)
                 return
