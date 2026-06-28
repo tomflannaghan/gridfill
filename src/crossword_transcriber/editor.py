@@ -6,6 +6,7 @@ import os
 import tkinter as tk
 import tkinter.colorchooser
 import tkinter.filedialog
+import tkinter.simpledialog
 
 import cv2
 import numpy as np
@@ -144,6 +145,7 @@ class _GridEditor(tk.Tk):
 
         self._selected: tuple[int, int] | None = None
         self._multi_entry = False
+        self._annotations: list[tuple[float, float, str]] = []
 
         self._canvas = tk.Canvas(self, width=self._display_w, height=self._display_h)
         self._canvas.pack()
@@ -155,6 +157,62 @@ class _GridEditor(tk.Tk):
         self.bind("<Key>", self._on_key)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
+        self._build_menu()
+        self._render_and_display()
+
+    # ------------------------------------------------------------------
+    # Menu bar
+    # ------------------------------------------------------------------
+
+    def _build_menu(self) -> None:
+        menubar = tk.Menu(self)
+
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Save Image", accelerator="Ctrl+S", command=self._save_image)
+        file_menu.add_command(
+            label="Save as CSV", accelerator="Ctrl+Shift+S", command=self._save_csv
+        )
+        file_menu.add_separator()
+        file_menu.add_command(label="Close", accelerator="Return", command=self._on_close)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        edit_menu.add_command(
+            label="Clear Cell", accelerator="Delete", command=self._clear_selected_cell
+        )
+        edit_menu.add_command(label="Deselect", accelerator="Escape", command=self._deselect)
+        menubar.add_cascade(label="Edit", menu=edit_menu)
+
+        text_menu = tk.Menu(menubar, tearoff=0)
+        text_menu.add_command(label="Clear All Text", command=self._clear_annotations)
+        menubar.add_cascade(label="Text", menu=text_menu)
+
+        highlight_menu = tk.Menu(menubar, tearoff=0)
+        highlight_menu.add_command(
+            label="Highlight Cell", accelerator="Ctrl+H", command=self._toggle_highlight
+        )
+        highlight_menu.add_command(
+            label="Highlight Colour…",
+            accelerator="Ctrl+Shift+H",
+            command=self._pick_highlight_color,
+        )
+        menubar.add_cascade(label="Highlight", menu=highlight_menu)
+
+        self.config(menu=menubar)
+
+    def _clear_selected_cell(self) -> None:
+        if self._selected is None:
+            return
+        r, c = self._selected
+        cell = self.grid_model.cells[r][c]
+        cell.letter = None
+        cell.kind = CellKind.EMPTY
+        cell.confidence = None
+        self._render_and_display()
+
+    def _deselect(self) -> None:
+        self._selected = None
+        self._multi_entry = False
         self._render_and_display()
 
     # ------------------------------------------------------------------
@@ -281,6 +339,15 @@ class _GridEditor(tk.Tk):
             thickness = 5 if self._multi_entry else 3
             cv2.polylines(result, [src_corners], True, _SELECTION_BGR, thickness)
 
+        if self._annotations:
+            pil_img = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+            draw = ImageDraw.Draw(pil_img)
+            b, g, r = self._color
+            rgb_color = (r, g, b)
+            for ax, ay, text in self._annotations:
+                draw.text((ax, ay), text, font=self._single_font, fill=rgb_color, anchor="ls")
+            result = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+
         return result
 
     def _render_and_display(self) -> None:
@@ -321,6 +388,7 @@ class _GridEditor(tk.Tk):
             self._boxes,
         )
         if hit is None:
+            self._add_annotation(event.x, event.y)
             return
         cell = self.grid_model.cells[hit[0]][hit[1]]
         if cell.kind is CellKind.BLOCK:
@@ -335,8 +403,7 @@ class _GridEditor(tk.Tk):
                 self._multi_entry = False
                 self._render_and_display()
             else:
-                self._selected = None
-                self._render_and_display()
+                self._deselect()
             return
 
         if event.keysym == "Return":
@@ -379,11 +446,9 @@ class _GridEditor(tk.Tk):
             cell = self.grid_model.cells[r][c]
             if self._multi_entry and cell.letter and len(cell.letter) > 1:
                 cell.letter = cell.letter[:-1]
+                self._render_and_display()
             else:
-                cell.letter = None
-                cell.kind = CellKind.EMPTY
-                cell.confidence = None
-            self._render_and_display()
+                self._clear_selected_cell()
             return
 
         ch = event.char.upper()
@@ -425,6 +490,23 @@ class _GridEditor(tk.Tk):
             if self.grid_model.cells[r][c].kind is not CellKind.BLOCK:
                 self._selected = (r, c)
                 return
+
+    # ------------------------------------------------------------------
+    # Annotations
+    # ------------------------------------------------------------------
+
+    def _add_annotation(self, display_x: float, display_y: float) -> None:
+        text = tk.simpledialog.askstring("Add Text", "Enter text:", parent=self)
+        if not text:
+            return
+        src_x = display_x / self._scale
+        src_y = display_y / self._scale
+        self._annotations.append((src_x, src_y, text))
+        self._render_and_display()
+
+    def _clear_annotations(self) -> None:
+        self._annotations.clear()
+        self._render_and_display()
 
     # ------------------------------------------------------------------
     # Highlighting
