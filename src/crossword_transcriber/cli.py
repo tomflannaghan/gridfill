@@ -13,7 +13,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_edit = sub.add_parser("edit", help="Interactively edit a grid overlaid on its image.")
     p_edit.add_argument(
         "path",
-        help="Path to the grid image, or a .cwd document saved by a previous session.",
+        nargs="?",
+        default=None,
+        help=(
+            "Path to the grid image, a PDF (its last page is used), or a .cwd "
+            "document saved by a previous session. Omit to start with a blank "
+            "editor and use File > Open."
+        ),
     )
     p_edit.add_argument("-o", "--out", help="Default output path for exporting the rendered image.")
     p_edit.add_argument("--font", help="Path to a TrueType font file.")

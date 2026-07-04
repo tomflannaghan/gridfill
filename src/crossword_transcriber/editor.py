@@ -35,6 +35,17 @@ _ACTIVE_GRID_BGR = (0, 180, 0)
 _WHITE_DISTANCE_THRESHOLD = 30
 _MAX_DISPLAY_SIZE = 900
 _CELL_FILL_INSET_FRAC = 0.06
+_BLANK_IMAGE_SIZE = (800, 600)  # (width, height), used when starting with no file
+_OPEN_FILETYPES = [
+    (
+        "Crossword document, image, or PDF",
+        f"*{CWD_EXTENSION} *.png *.jpg *.jpeg *.bmp *.tif *.tiff *.pdf",
+    ),
+    ("Crossword document", f"*{CWD_EXTENSION}"),
+    ("Images", "*.png *.jpg *.jpeg *.bmp *.tif *.tiff"),
+    ("PDF", "*.pdf"),
+    ("All files", "*.*"),
+]
 
 
 @dataclass
@@ -47,47 +58,53 @@ class _GridState:
     multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont] = field(default_factory=dict)
 
 
-def edit_grid(
-    source: ImageSource,
-    out_path: str | os.PathLike[str] | None = None,
-    font_path: str | os.PathLike[str] | None = None,
-    color: tuple[int, int, int] = (0, 0, 0),
-) -> list[RectangularGrid]:
-    """Open an interactive editor for all grids found in *source*.
+_SavePath = str | os.PathLike[str] | None
 
-    *source* is either an image (a path or an already-loaded array) to detect
-    grids from, or the path to a ``.cwd`` document previously written by this
-    editor, which resumes editing with its saved grids and annotations.
 
-    Each grid gets its own editing state. Click a cell to select its grid.
+def _blank_image() -> np.ndarray:
+    w, h = _BLANK_IMAGE_SIZE
+    return np.full((h, w, 3), 255, dtype=np.uint8)
 
-    Returns a list of edited :class:`RectangularGrid` objects (one per grid).
+
+def _load_source(
+    source: ImageSource | None,
+) -> tuple[np.ndarray, list[RectangularGrid], _SavePath, list[tuple[float, float, str]]]:
+    """Resolve *source* into ``(image, grids, save_path, annotations)``.
+
+    *source* may be ``None`` (start blank), an already-loaded image array, an
+    image path to detect grids from, or the path to a ``.cwd`` document
+    previously written by this editor, which resumes with its saved grids and
+    annotations.
     """
-    save_path: str | os.PathLike[str] | None = None
-    annotations: list[tuple[float, float, str]] = []
+    if source is None:
+        return _blank_image(), [], None, []
 
     if isinstance(source, np.ndarray):
         image = source.copy()
         binary = binarize(to_grayscale(image))
-        grids = detect_grids(binary)
-    elif os.fspath(source).endswith(CWD_EXTENSION):
+        return image, detect_grids(binary), None, []
+
+    if os.fspath(source).endswith(CWD_EXTENSION):
         document = load_document(source)
-        image = document.image
         for grid in document.grids:
             if not isinstance(grid, RectangularGrid):
                 raise NotImplementedError(
                     f"Editor does not yet support grid type {type(grid).__name__!r}"
                 )
         grids = cast(list[RectangularGrid], document.grids)
-        annotations = document.annotations
-        save_path = source
-    else:
-        image = load_image(source).copy()
-        binary = binarize(to_grayscale(image))
-        grids = detect_grids(binary)
+        return document.image, grids, source, document.annotations
 
+    image = load_image(source).copy()
+    binary = binarize(to_grayscale(image))
+    return image, detect_grids(binary), None, []
+
+
+def _make_grid_states(
+    grids: list[RectangularGrid],
+    image: np.ndarray,
+    loader: Callable[[int], FontT],
+) -> list[_GridState]:
     src_h, src_w = image.shape[:2]
-    loader = font_loader(font_path)
     grid_states: list[_GridState] = []
     for grid in grids:
         sample_px = polygon_to_pixels(grid.cell(0, 0).polygon, (src_w, src_h))
@@ -96,6 +113,31 @@ def edit_grid(
         grid_states.append(
             _GridState(grid=grid, single_font=single_font, ref_cell_size=(ref_w, ref_h))
         )
+    return grid_states
+
+
+def edit_grid(
+    source: ImageSource | None = None,
+    out_path: str | os.PathLike[str] | None = None,
+    font_path: str | os.PathLike[str] | None = None,
+    color: tuple[int, int, int] = (0, 0, 0),
+) -> list[RectangularGrid]:
+    """Open an interactive editor for all grids found in *source*.
+
+    *source* is either an image (a path, an already-loaded array, or a PDF --
+    whose last page is rendered at print resolution) to detect grids from,
+    the path to a ``.cwd`` document previously written by this editor (which
+    resumes editing with its saved grids and annotations), or ``None`` to
+    start with a blank editor -- use File > Open to load an image, PDF, or
+    document once it's running.
+
+    Each grid gets its own editing state. Click a cell to select its grid.
+
+    Returns a list of edited :class:`RectangularGrid` objects (one per grid).
+    """
+    image, grids, save_path, annotations = _load_source(source)
+    loader = font_loader(font_path)
+    grid_states = _make_grid_states(grids, image, loader)
 
     editor = _GridEditor(
         image=image,
@@ -143,30 +185,12 @@ class _GridEditor(tk.Tk):
         super().__init__()
         self.title("Crossword Grid Editor")
 
-        self._grid_states = grid_states
         self._color = color
         self._highlight_color = _DEFAULT_HIGHLIGHT_COLOR_BGR
         self._out_path = out_path
-        self._save_path = save_path
-        self._image = image
         self._loader = loader
 
-        src_h, src_w = image.shape[:2]
-        self._src_size = (src_w, src_h)
-
-        self._base_image = self._compute_base_image(image, grid_states)
-
-        scale = min(_MAX_DISPLAY_SIZE / src_w, _MAX_DISPLAY_SIZE / src_h, 1.0)
-        self._display_w = int(src_w * scale)
-        self._display_h = int(src_h * scale)
-        self._scale = scale
-
-        self._active_grid_index: int | None = 0 if len(grid_states) == 1 else None
-        self._selected: tuple[int, int] | None = None
-        self._multi_entry = False
-        self._annotations: list[tuple[float, float, str]] = list(annotations or [])
-
-        self._canvas = tk.Canvas(self, width=self._display_w, height=self._display_h)
+        self._canvas = tk.Canvas(self)
         self._canvas.pack()
         self._photo: ImageTk.PhotoImage | None = None
         self._canvas_image = self._canvas.create_image(0, 0, anchor=tk.NW)
@@ -177,11 +201,44 @@ class _GridEditor(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._build_menu()
-        self._render_and_display()
+        self._load_state(image, grid_states, save_path, annotations)
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _load_state(
+        self,
+        image: np.ndarray,
+        grid_states: list[_GridState],
+        save_path: str | os.PathLike[str] | None,
+        annotations: list[tuple[float, float, str]] | None,
+    ) -> None:
+        """(Re)initialize all editing state from a freshly loaded image/grids.
+
+        Used both for the initial load and for File > Open, which replaces
+        the current session entirely.
+        """
+        self._image = image
+        self._grid_states = grid_states
+        self._save_path = save_path
+
+        src_h, src_w = image.shape[:2]
+        self._src_size = (src_w, src_h)
+        self._base_image = self._compute_base_image(image, grid_states)
+
+        scale = min(_MAX_DISPLAY_SIZE / src_w, _MAX_DISPLAY_SIZE / src_h, 1.0)
+        self._display_w = int(src_w * scale)
+        self._display_h = int(src_h * scale)
+        self._scale = scale
+        self._canvas.config(width=self._display_w, height=self._display_h)
+
+        self._active_grid_index: int | None = 0 if len(grid_states) == 1 else None
+        self._selected: tuple[int, int] | None = None
+        self._multi_entry = False
+        self._annotations: list[tuple[float, float, str]] = list(annotations or [])
+
+        self._render_and_display()
 
     @property
     def _active(self) -> _GridState | None:
@@ -206,6 +263,7 @@ class _GridEditor(tk.Tk):
         menubar = tk.Menu(self)
 
         file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Open…", accelerator="Ctrl+O", command=self._open_file)
         file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self._save_document)
         file_menu.add_command(
             label="Export Image…",
@@ -213,7 +271,7 @@ class _GridEditor(tk.Tk):
             command=self._save_image,
         )
         file_menu.add_separator()
-        file_menu.add_command(label="Close", accelerator="Return", command=self._on_close)
+        file_menu.add_command(label="Close", command=self._on_close)
         menubar.add_cascade(label="File", menu=file_menu)
 
         edit_menu = tk.Menu(menubar, tearoff=0)
@@ -461,13 +519,15 @@ class _GridEditor(tk.Tk):
             if self._multi_entry:
                 self._multi_entry = False
                 self._render_and_display()
-            else:
-                self._on_close()
             return
 
         state = event.state if isinstance(event.state, int) else 0
         ctrl = bool(state & 0x4)
         shift = bool(state & 0x1)
+
+        if ctrl and event.keysym.lower() == "o":
+            self._open_file()
+            return
 
         if ctrl and event.keysym.lower() == "s":
             if shift:
@@ -617,8 +677,17 @@ class _GridEditor(tk.Tk):
         self._highlight_color = (int(rgb[2]), int(rgb[1]), int(rgb[0]))
 
     # ------------------------------------------------------------------
-    # Save
+    # Open / Save
     # ------------------------------------------------------------------
+
+    def _open_file(self) -> None:
+        path = tk.filedialog.askopenfilename(filetypes=_OPEN_FILETYPES)
+        if not path:
+            return
+        image, grids, save_path, annotations = _load_source(path)
+        grid_states = _make_grid_states(grids, image, self._loader)
+        self._load_state(image, grid_states, save_path, annotations)
+        self.title(f"Crossword Grid Editor — opened {os.path.basename(path)}")
 
     def _save_image(self) -> None:
         path = self._out_path
