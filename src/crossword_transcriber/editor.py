@@ -33,7 +33,8 @@ _SELECTION_BGR = (255, 180, 0)
 _DEFAULT_HIGHLIGHT_COLOR_BGR = (0, 255, 255)
 _ACTIVE_GRID_BGR = (0, 180, 0)
 _WHITE_DISTANCE_THRESHOLD = 30
-_MAX_DISPLAY_SIZE = 900
+_MAX_DISPLAY_SIZE = 900  # initial window size cap, before the user has resized it
+_RESIZE_DEBOUNCE_MS = 80
 _CELL_FILL_INSET_FRAC = 0.06
 _BLANK_IMAGE_SIZE = (800, 600)  # (width, height), used when starting with no file
 _OPEN_FILETYPES = [
@@ -123,28 +124,54 @@ def _fit_font(
 def _make_grid_states(
     grids: list[RectangularGrid],
     src_size: tuple[int, int],
-    display_size: tuple[int, int],
     loader: Callable[[int], FontT],
 ) -> list[_GridState]:
+    """Build per-grid state with full-resolution (export) fonts fitted.
+
+    Display-resolution fonts are filled in separately by
+    :func:`_fit_display_fonts` once the display size is known, and refitted
+    again whenever the window is resized.
+    """
     grid_states: list[_GridState] = []
     for grid in grids:
         single_font, ref_cell_size = _fit_font(grid, src_size, loader)
-        display_single_font, display_ref_cell_size = _fit_font(grid, display_size, loader)
         grid_states.append(
             _GridState(
                 grid=grid,
                 single_font=single_font,
                 ref_cell_size=ref_cell_size,
-                display_single_font=display_single_font,
-                display_ref_cell_size=display_ref_cell_size,
+                # Placeholders, overwritten by _fit_display_fonts before use.
+                display_single_font=single_font,
+                display_ref_cell_size=ref_cell_size,
             )
         )
     return grid_states
 
 
-def _fit_display_size(src_w: int, src_h: int) -> tuple[int, int]:
-    scale = min(_MAX_DISPLAY_SIZE / src_w, _MAX_DISPLAY_SIZE / src_h, 1.0)
-    return max(1, int(src_w * scale)), max(1, int(src_h * scale))
+def _fit_display_fonts(
+    grid_states: list[_GridState],
+    display_size: tuple[int, int],
+    loader: Callable[[int], FontT],
+) -> None:
+    for gs in grid_states:
+        gs.display_single_font, gs.display_ref_cell_size = _fit_font(gs.grid, display_size, loader)
+        gs.display_multi_font_cache = {}
+
+
+def _fit_display_size(
+    src_w: int, src_h: int, box_w: int, box_h: int, *, allow_upscale: bool
+) -> tuple[int, int]:
+    """Fit (src_w, src_h) into (box_w, box_h), preserving aspect ratio.
+
+    When *allow_upscale* is ``False`` the image is never enlarged past its
+    native resolution (used for the very first window before it has a real
+    size); a live window resize passes ``True`` so the image grows to match.
+    """
+    ratios = [box_w / max(1, src_w), box_h / max(1, src_h)]
+    if not allow_upscale:
+        ratios.append(1.0)
+    scale = min(ratios)
+    return max(1, round(src_w * scale)), max(1, round(src_h * scale))
 
 
 def edit_grid(
@@ -219,14 +246,18 @@ class _GridEditor(tk.Tk):
         self._highlight_color = _DEFAULT_HIGHLIGHT_COLOR_BGR
         self._out_path = out_path
         self._loader = loader
+        self._resize_job: str | None = None
+        self._last_canvas_box: tuple[int, int] | None = None
+        self._has_loaded = False
 
         self._canvas = tk.Canvas(self)
-        self._canvas.pack()
+        self._canvas.pack(fill=tk.BOTH, expand=True)
         self._photo: ImageTk.PhotoImage | None = None
         self._canvas_image = self._canvas.create_image(0, 0, anchor=tk.NW)
 
         self._canvas.bind("<Button-1>", self._on_click)
         self._canvas.bind("<Double-Button-1>", self._on_double_click)
+        self._canvas.bind("<Configure>", self._on_canvas_resize)
         self.bind("<Key>", self._on_key)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -259,34 +290,76 @@ class _GridEditor(tk.Tk):
 
         src_h, src_w = image.shape[:2]
         self._src_size = (src_w, src_h)
-
-        display_w, display_h = _fit_display_size(src_w, src_h)
-        self._display_w = display_w
-        self._display_h = display_h
-        self._display_size = (display_w, display_h)
-        self._scale = display_w / src_w
-        self._canvas.config(width=display_w, height=display_h)
-
-        if (display_w, display_h) == (src_w, src_h):
-            self._display_image = image
-        else:
-            self._display_image = cv2.resize(
-                image, (display_w, display_h), interpolation=cv2.INTER_AREA
-            )
-
-        self._grid_states = _make_grid_states(
-            grids, self._src_size, self._display_size, self._loader
-        )
-        self._base_image_display = self._compute_base_image(
-            self._display_image, self._grid_states
-        )
+        self._grid_states = _make_grid_states(grids, self._src_size, self._loader)
 
         self._active_grid_index: int | None = 0 if len(grids) == 1 else None
         self._selected: tuple[int, int] | None = None
         self._multi_entry = False
         self._annotations: list[tuple[float, float, str]] = list(annotations or [])
 
+        # Before the window has ever been shown, fall back to the initial
+        # size cap and let the window grow to fit it -- the canvas' own
+        # reported size can't be trusted yet (Tk gives it a nonzero default
+        # even unmapped). Otherwise (a fresh File > Open into an
+        # already-open editor) fit the new image into whatever size the
+        # user currently has the window at.
+        bootstrapping = not self._has_loaded
+        self._has_loaded = True
+        if bootstrapping:
+            box_w, box_h = _MAX_DISPLAY_SIZE, _MAX_DISPLAY_SIZE
+        else:
+            self.update_idletasks()
+            box_w, box_h = self._canvas.winfo_width(), self._canvas.winfo_height()
+        self._refit_display(
+            box_w, box_h, allow_upscale=not bootstrapping, resize_window=bootstrapping
+        )
+
+    def _refit_display(
+        self, box_w: int, box_h: int, *, allow_upscale: bool, resize_window: bool = False
+    ) -> None:
+        """Recompute the downscaled display image/fonts to fit a (box_w, box_h) canvas.
+
+        Called on load and whenever the window is resized, so the interactive
+        view always matches the available canvas space.
+        """
+        src_w, src_h = self._src_size
+        display_w, display_h = _fit_display_size(
+            src_w, src_h, box_w, box_h, allow_upscale=allow_upscale
+        )
+        self._display_w = display_w
+        self._display_h = display_h
+        self._display_size = (display_w, display_h)
+        self._scale = display_w / src_w
+
+        if resize_window:
+            self._canvas.config(width=display_w, height=display_h)
+
+        if (display_w, display_h) == (src_w, src_h):
+            self._display_image = self._image
+        else:
+            interp = cv2.INTER_AREA if display_w <= src_w else cv2.INTER_CUBIC
+            self._display_image = cv2.resize(
+                self._image, (display_w, display_h), interpolation=interp
+            )
+
+        _fit_display_fonts(self._grid_states, self._display_size, self._loader)
+        self._base_image_display = self._compute_base_image(
+            self._display_image, self._grid_states
+        )
         self._render_and_display()
+
+    def _on_canvas_resize(self, event: tk.Event[tk.Canvas]) -> None:
+        box = (event.width, event.height)
+        if box == self._last_canvas_box:
+            return
+        self._last_canvas_box = box
+        if self._resize_job is not None:
+            self.after_cancel(self._resize_job)
+        self._resize_job = self.after(_RESIZE_DEBOUNCE_MS, lambda: self._finish_resize(box))
+
+    def _finish_resize(self, box: tuple[int, int]) -> None:
+        self._resize_job = None
+        self._refit_display(*box, allow_upscale=True)
 
     @property
     def _active(self) -> _GridState | None:
