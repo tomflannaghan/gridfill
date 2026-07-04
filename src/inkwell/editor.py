@@ -78,6 +78,14 @@ def _blank_image() -> np.ndarray:
     return np.full((h, w, 3), 255, dtype=np.uint8)
 
 
+def _default_save_name(input_path: _SavePath, extension: str) -> str | None:
+    """Suggest a save-dialog filename: the input's basename with *extension* swapped in."""
+    if input_path is None:
+        return None
+    stem = os.path.splitext(os.path.basename(os.fspath(input_path)))[0]
+    return stem + extension
+
+
 def _load_source(
     source: ImageSource | None,
 ) -> tuple[np.ndarray, list[RectangularGrid], _SavePath, list[tuple[float, float, str]]]:
@@ -195,6 +203,7 @@ def edit_grid(
     """
     image, grids, save_path, annotations = _load_source(source)
     loader = font_loader(font_path)
+    input_path = None if source is None or isinstance(source, np.ndarray) else source
 
     editor = _GridEditor(
         image=image,
@@ -203,6 +212,7 @@ def edit_grid(
         color=color,
         out_path=out_path,
         save_path=save_path,
+        input_path=input_path,
         annotations=annotations,
     )
     editor.mainloop()
@@ -237,10 +247,11 @@ class _GridEditor(tk.Tk):
         color: tuple[int, int, int],
         out_path: str | os.PathLike[str] | None,
         save_path: str | os.PathLike[str] | None = None,
+        input_path: str | os.PathLike[str] | None = None,
         annotations: list[tuple[float, float, str]] | None = None,
     ) -> None:
         super().__init__()
-        self.title("Crossword Grid Editor")
+        self.title("Inkwell")
 
         self._color = color
         self._highlight_color = _DEFAULT_HIGHLIGHT_COLOR_BGR
@@ -262,7 +273,7 @@ class _GridEditor(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._build_menu()
-        self._load_state(image, grids, save_path, annotations)
+        self._load_state(image, grids, save_path, input_path, annotations)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -273,6 +284,7 @@ class _GridEditor(tk.Tk):
         image: np.ndarray,
         grids: list[RectangularGrid],
         save_path: str | os.PathLike[str] | None,
+        input_path: str | os.PathLike[str] | None,
         annotations: list[tuple[float, float, str]] | None,
     ) -> None:
         """(Re)initialize all editing state from a freshly loaded image/grids.
@@ -287,6 +299,7 @@ class _GridEditor(tk.Tk):
         """
         self._image = image
         self._save_path = save_path
+        self._input_path = input_path
 
         src_h, src_w = image.shape[:2]
         self._src_size = (src_w, src_h)
@@ -831,14 +844,15 @@ class _GridEditor(tk.Tk):
         if not path:
             return
         image, grids, save_path, annotations = _load_source(path)
-        self._load_state(image, grids, save_path, annotations)
-        self.title(f"Crossword Grid Editor — opened {os.path.basename(path)}")
+        self._load_state(image, grids, save_path, path, annotations)
+        self.title(f"Inkwell — opened {os.path.basename(path)}")
 
     def _save_image(self) -> None:
         path = self._out_path
         if path is None:
             path = tkinter.filedialog.asksaveasfilename(
                 defaultextension=".png",
+                initialfile=_default_save_name(self._input_path, ".png") or "",
                 filetypes=[
                     ("PNG", "*.png"),
                     ("JPEG", "*.jpg"),
@@ -850,13 +864,14 @@ class _GridEditor(tk.Tk):
         rendered = self._render(for_save=True)
         save_image(path, rendered)
         self._out_path = path
-        self.title(f"Crossword Grid Editor — exported {os.path.basename(str(path))}")
+        self.title(f"Inkwell — exported {os.path.basename(str(path))}")
 
     def _save_document(self) -> None:
         path = self._save_path
         if path is None:
             path = tkinter.filedialog.asksaveasfilename(
                 defaultextension=CWD_EXTENSION,
+                initialfile=_default_save_name(self._input_path, CWD_EXTENSION) or "",
                 filetypes=[
                     ("Crossword document", f"*{CWD_EXTENSION}"),
                     ("All files", "*.*"),
@@ -867,7 +882,7 @@ class _GridEditor(tk.Tk):
         grids = [gs.grid for gs in self._grid_states]
         save_document(path, self._image, grids, self._annotations)
         self._save_path = path
-        self.title(f"Crossword Grid Editor — saved {os.path.basename(str(path))}")
+        self.title(f"Inkwell — saved {os.path.basename(str(path))}")
 
     def _on_close(self) -> None:
         self.destroy()
