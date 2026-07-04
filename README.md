@@ -12,6 +12,26 @@ uv venv
 uv pip install -e ".[dev]"
 ```
 
+## Standalone executable
+
+No Python install needed for end users. Prebuilt Windows and Linux
+executables are attached to each [release](../../releases) (built by
+[.github/workflows/build.yml](.github/workflows/build.yml) via PyInstaller).
+Double-click, or drag a scan/PDF/`.cwd` file onto the executable to open it
+directly.
+
+To build one yourself:
+
+```bash
+uv sync --extra build
+uv run pyinstaller --noconfirm --clean packaging/crossword-transcriber.spec
+# -> dist/crossword-transcriber(.exe)
+```
+
+PyInstaller doesn't cross-compile, so this produces an executable for
+whichever OS you run it on; the release workflow builds both by running on
+GitHub-hosted Linux and Windows runners.
+
 ## Usage
 
 ```bash

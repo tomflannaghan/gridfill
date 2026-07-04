@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.resources
 import math
 import os
 from collections.abc import Callable
@@ -17,6 +18,13 @@ _FALLBACK_FONTS = (
     "DejaVuSans-Bold.ttf",
     "LiberationSans-Regular.ttf",
     "Arial.ttf",
+)
+
+# Bundled as a last resort so the editor works even where none of the above
+# system fonts are installed -- notably on Windows, and inside a PyInstaller
+# build, which has no system font directory to fall back on.
+_BUNDLED_FONT = importlib.resources.files("crossword_transcriber.assets.fonts").joinpath(
+    "DejaVuSans.ttf"
 )
 
 
@@ -38,10 +46,8 @@ def font_loader(font_path: str | os.PathLike[str] | None) -> Callable[[int], Fon
         break
 
     if chosen is None:
-        raise OSError(
-            "No usable TrueType font found; pass font_path explicitly. "
-            f"Tried: {', '.join(candidates)}"
-        )
+        with importlib.resources.as_file(_BUNDLED_FONT) as bundled_path:
+            chosen = str(bundled_path)
 
     return lambda size: ImageFont.truetype(chosen, size)
 
