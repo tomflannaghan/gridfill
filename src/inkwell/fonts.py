@@ -23,9 +23,7 @@ _FALLBACK_FONTS = (
 # Bundled as a last resort so the editor works even where none of the above
 # system fonts are installed -- notably on Windows, and inside a PyInstaller
 # build, which has no system font directory to fall back on.
-_BUNDLED_FONT = importlib.resources.files("crossword_transcriber.assets.fonts").joinpath(
-    "DejaVuSans.ttf"
-)
+_BUNDLED_FONT = importlib.resources.files("inkwell.assets.fonts").joinpath("DejaVuSans.ttf")
 
 
 def font_loader(font_path: str | os.PathLike[str] | None) -> Callable[[int], FontT]:

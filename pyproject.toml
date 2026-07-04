@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "crossword-transcriber"
+name = "inkwell"
 version = "0.1.0"
 description = "Detect handwritten crossword grids in images and edit them interactively."
 readme = "README.md"
@@ -29,10 +29,10 @@ build = [
 ]
 
 [project.scripts]
-crossword-transcriber = "crossword_transcriber.cli:main"
+inkwell = "inkwell.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/crossword_transcriber"]
+packages = ["src/inkwell"]
 
 [tool.ruff]
 line-length = 100

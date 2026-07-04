@@ -12,9 +12,9 @@ from pathlib import Path
 import cv2
 import pytest
 
-from crossword_transcriber.detection import detect_grid
-from crossword_transcriber.preprocess import binarize, to_grayscale
-from crossword_transcriber.types import RectangularGrid
+from inkwell.detection import detect_grid
+from inkwell.preprocess import binarize, to_grayscale
+from inkwell.types import RectangularGrid
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

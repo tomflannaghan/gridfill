@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-import crossword_transcriber as ct
-from crossword_transcriber.types import (
+import inkwell as ct
+from inkwell.types import (
     BoundingBox,
     Cell,
     CellKind,

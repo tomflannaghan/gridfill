@@ -1,4 +1,4 @@
-# crossword-transcriber
+# inkwell
 
 Detect a handwritten crossword grid's layout from a scanned image or PDF and
 edit it interactively: click a cell, type letters, highlight cells, drop
@@ -24,8 +24,8 @@ To build one yourself:
 
 ```bash
 uv sync --extra build
-uv run pyinstaller --noconfirm --clean packaging/crossword-transcriber.spec
-# -> dist/crossword-transcriber(.exe)
+uv run pyinstaller --noconfirm --clean packaging/inkwell.spec
+# -> dist/inkwell(.exe)
 ```
 
 PyInstaller doesn't cross-compile, so this produces an executable for
@@ -35,17 +35,17 @@ GitHub-hosted Linux and Windows runners.
 ## Usage
 
 ```bash
-crossword-transcriber edit scan.png -o filled_out.png
+inkwell edit scan.png -o filled_out.png
 # A PDF also works; its last page is used:
-crossword-transcriber edit scan.pdf
+inkwell edit scan.pdf
 # Or resume a session saved earlier:
-crossword-transcriber edit scan.cwd
+inkwell edit scan.cwd
 # Or start blank and use File > Open:
-crossword-transcriber edit
+inkwell edit
 ```
 
 ```python
-from crossword_transcriber import edit_grid
+from inkwell import edit_grid
 
 # Opens an interactive editor window for every grid found in the image.
 # Also accepts a PDF (its last page is rendered at print resolution), the

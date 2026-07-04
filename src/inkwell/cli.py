@@ -7,7 +7,7 @@ from collections.abc import Sequence
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="crossword-transcriber")
+    parser = argparse.ArgumentParser(prog="inkwell")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_edit = sub.add_parser("edit", help="Interactively edit a grid overlaid on its image.")

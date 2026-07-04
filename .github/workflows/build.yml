@@ -21,14 +21,14 @@ jobs:
 
       - run: uv sync --extra build
 
-      - run: uv run pyinstaller --noconfirm --clean packaging/crossword-transcriber.spec
+      - run: uv run pyinstaller --noconfirm --clean packaging/inkwell.spec
 
       - uses: actions/upload-artifact@v4
         with:
-          name: crossword-transcriber-${{ matrix.os }}
+          name: inkwell-${{ matrix.os }}
           path: |
-            dist/crossword-transcriber
-            dist/crossword-transcriber.exe
+            dist/inkwell
+            dist/inkwell.exe
           if-no-files-found: ignore
 
   release:
@@ -44,8 +44,8 @@ jobs:
 
       - run: |
           mkdir -p release
-          cp artifacts/crossword-transcriber-ubuntu-latest/crossword-transcriber release/crossword-transcriber-linux
-          cp artifacts/crossword-transcriber-windows-latest/crossword-transcriber.exe release/crossword-transcriber-windows.exe
+          cp artifacts/inkwell-ubuntu-latest/inkwell release/inkwell-linux
+          cp artifacts/inkwell-windows-latest/inkwell.exe release/inkwell-windows.exe
 
       - uses: softprops/action-gh-release@v2
         with:

@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from crossword_transcriber.document import load_document, save_document
-from crossword_transcriber.errors import DocumentError
-from crossword_transcriber.types import Cell, CellKind, RectangularGrid
+from inkwell.document import load_document, save_document
+from inkwell.errors import DocumentError
+from inkwell.types import Cell, CellKind, RectangularGrid
 
 
 def _sample_image() -> np.ndarray:

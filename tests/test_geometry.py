@@ -5,10 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from crossword_transcriber.detection import detect_grid
-from crossword_transcriber.errors import GridDetectionError
-from crossword_transcriber.preprocess import binarize, to_grayscale
-from crossword_transcriber.types import Cell, RectangularGrid
+from inkwell.detection import detect_grid
+from inkwell.errors import GridDetectionError
+from inkwell.preprocess import binarize, to_grayscale
+from inkwell.types import Cell, RectangularGrid
 
 from .synthetic import make_grid
 

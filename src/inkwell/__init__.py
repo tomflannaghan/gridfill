@@ -2,7 +2,7 @@
 
 Public API:
 
-    from crossword_transcriber import edit_grid
+    from inkwell import edit_grid
 """
 
 from __future__ import annotations

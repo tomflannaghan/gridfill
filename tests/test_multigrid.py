@@ -7,9 +7,9 @@ from pathlib import Path
 import cv2
 import pytest
 
-from crossword_transcriber.detection import detect_grid, detect_grids
-from crossword_transcriber.errors import GridDetectionError, MultipleGridsError
-from crossword_transcriber.preprocess import binarize, to_grayscale
+from inkwell.detection import detect_grid, detect_grids
+from inkwell.errors import GridDetectionError, MultipleGridsError
+from inkwell.preprocess import binarize, to_grayscale
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

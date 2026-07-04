@@ -21,7 +21,9 @@ from .types import Grid, grid_from_dict
 
 CWD_EXTENSION = ".cwd"
 
-_FORMAT_MAGIC = "crossword-transcriber"
+_FORMAT_MAGIC = "inkwell"
+# Accepted on load so documents saved before the project's rename still open.
+_LEGACY_FORMAT_MAGICS = {"crossword-transcriber"}
 _FORMAT_VERSION = 1
 
 
@@ -64,8 +66,8 @@ def load_document(path: str | os.PathLike[str]) -> Document:
     with open(path) as f:
         payload = json.load(f)
 
-    if payload.get("format") != _FORMAT_MAGIC:
-        raise DocumentError(f"Not a crossword-transcriber document: {os.fspath(path)!r}")
+    if payload.get("format") not in {_FORMAT_MAGIC, *_LEGACY_FORMAT_MAGICS}:
+        raise DocumentError(f"Not an inkwell document: {os.fspath(path)!r}")
 
     image_bytes = base64.b64decode(payload["image"]["data"])
     array = np.frombuffer(image_bytes, dtype=np.uint8)
