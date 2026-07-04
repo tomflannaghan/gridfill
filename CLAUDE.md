@@ -7,7 +7,7 @@ Guidance for working in this repo.
 A Python library and interactive editor for detecting a crossword grid's layout
 (blocked or barred) from a scanned image and letting a person fill it in by hand —
 click a cell, type letters, highlight cells, add free-text annotations — then save
-the result as an image or CSV. Public API: `edit_grid()` in `crossword_transcriber`.
+the result as an image. Public API: `edit_grid()` in `crossword_transcriber`.
 There is no automatic letter recognition; all cell content is entered manually.
 
 ## Dev environment & commands

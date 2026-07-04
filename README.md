@@ -2,7 +2,7 @@
 
 Detect a handwritten crossword grid's layout from a scanned image and edit it
 interactively: click a cell, type letters, highlight cells, drop free-text
-annotations, then save the result as an image or CSV.
+annotations, then save the result as an image.
 
 ## Install (development)
 
@@ -26,9 +26,8 @@ grids = edit_grid("scan.png", out_path="filled_out.png")
 ```
 
 In the editor: click a cell to select it and type a letter; double-click for
-multi-letter cells (barred grids). `Ctrl+S` saves the rendered image, `Ctrl+Shift+S`
-saves the active grid as CSV. See the menu bar for highlighting and free-text
-annotation tools.
+multi-letter cells (barred grids). `Ctrl+S` saves the rendered image. See the
+menu bar for highlighting and free-text annotation tools.
 
 ## Scope (v1)
 

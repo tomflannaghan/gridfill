@@ -56,7 +56,7 @@ def edit_grid(
     """Open an interactive editor for all grids found in *source*.
 
     Each grid detected in the image gets its own editing state.  Click a cell
-    to select its grid; Save CSV applies to the active grid.
+    to select its grid.
 
     Returns a list of edited :class:`RectangularGrid` objects (one per
     detected grid).
@@ -181,11 +181,6 @@ class _GridEditor(tk.Tk):
 
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label="Save Image", accelerator="Ctrl+S", command=self._save_image)
-        file_menu.add_command(
-            label="Save as CSV",
-            accelerator="Ctrl+Shift+S",
-            command=self._save_csv,
-        )
         file_menu.add_separator()
         file_menu.add_command(label="Close", accelerator="Return", command=self._on_close)
         menubar.add_cascade(label="File", menu=file_menu)
@@ -444,10 +439,7 @@ class _GridEditor(tk.Tk):
         shift = bool(state & 0x1)
 
         if ctrl and event.keysym.lower() == "s":
-            if shift:
-                self._save_csv()
-            else:
-                self._save_image()
+            self._save_image()
             return
 
         if ctrl and event.keysym.lower() == "h":
@@ -611,19 +603,6 @@ class _GridEditor(tk.Tk):
         save_image(path, rendered)
         self._out_path = path
         self.title(f"Crossword Grid Editor — saved {os.path.basename(str(path))}")
-
-    def _save_csv(self) -> None:
-        gs = self._active
-        if gs is None:
-            return
-        path = tk.filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("CSV", "*.csv"), ("All files", "*.*")],
-        )
-        if not path:
-            return
-        gs.grid.save_csv(path)
-        self.title(f"Crossword Grid Editor — saved {os.path.basename(path)}")
 
     def _on_close(self) -> None:
         self.destroy()
