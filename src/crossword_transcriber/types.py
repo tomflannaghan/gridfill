@@ -5,10 +5,11 @@ from __future__ import annotations
 import csv
 import io
 import os
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from enum import Enum
 
-import numpy as np
+Point = tuple[float, float]
 
 
 class CellKind(Enum):
@@ -43,31 +44,61 @@ class BoundingBox:
 
 @dataclass
 class Cell:
-    """A single grid cell: its position, kind, and (if any) recognised letter."""
+    """A single grid cell: its shape on the source image, kind, and content.
 
-    row: int
-    col: int
-    box: BoundingBox
+    ``polygon`` is the ordered list of the cell's vertices as (x, y) fractions
+    of the *source* image's (width, height) -- i.e. the image originally
+    passed to grid detection, not any internal rectified intermediate. For a
+    rectangular cell this is always 4 points in
+    ``[top-left, top-right, bottom-right, bottom-left]`` order. A cell carries
+    no row/col of its own -- its position within a grid is purely a function
+    of where it sits in the owning :class:`Grid`'s ``cells`` list.
+    """
+
+    polygon: list[Point] = field(default_factory=list)
     kind: CellKind = CellKind.EMPTY
     letter: str | None = None
-    confidence: float | None = None
     background: tuple[int, int, int] | None = None
 
 
-@dataclass
-class Grid:
-    """A detected and segmented crossword grid.
+class Grid(ABC):
+    """Abstract base for any detected grid: an ordered list of cells.
 
-    Holds the per-cell results plus the perspective transform used to rectify the
-    source image, so the same geometry can be reused when rendering back onto it.
+    Concrete subclasses add geometry-specific metadata (e.g.
+    :class:`RectangularGrid`'s row/column counts), but every ``Grid`` exposes a
+    flat, ordered ``cells`` list so geometry-agnostic code can work with any
+    grid shape without caring which subclass it has.
+    """
+
+    cells: list[Cell]
+
+    @abstractmethod
+    def bounding_polygon(self) -> list[Point]:
+        """The grid's own outer boundary, in the same normalized coordinate
+        space as :attr:`Cell.polygon`."""
+
+
+@dataclass
+class RectangularGrid(Grid):
+    """A grid laid out on a regular row/column lattice.
+
+    ``cells`` is stored in row-major (reading) order; use :meth:`cell` to
+    address a specific row and column.
     """
 
     rows: int
     cols: int
-    cells: list[list[Cell]]
-    # 3x3 perspective transform mapping source-image -> rectified coords, or None
-    # if the image was already axis-aligned.
-    transform: np.ndarray | None = None
+    cells: list[Cell]
+
+    def cell(self, row: int, col: int) -> Cell:
+        return self.cells[row * self.cols + col]
+
+    def bounding_polygon(self) -> list[Point]:
+        top_left = self.cell(0, 0).polygon[0]
+        top_right = self.cell(0, self.cols - 1).polygon[1]
+        bottom_right = self.cell(self.rows - 1, self.cols - 1).polygon[2]
+        bottom_left = self.cell(self.rows - 1, 0).polygon[3]
+        return [top_left, top_right, bottom_right, bottom_left]
 
     def to_letters(self) -> list[list[str | None]]:
         """Project to the public output format.
@@ -76,9 +107,10 @@ class Grid:
         letter otherwise.
         """
         out: list[list[str | None]] = []
-        for row in self.cells:
+        for r in range(self.rows):
             out_row: list[str | None] = []
-            for cell in row:
+            for c in range(self.cols):
+                cell = self.cell(r, c)
                 if cell.kind is CellKind.BLOCK:
                     out_row.append(None)
                 elif cell.kind is CellKind.EMPTY:
@@ -91,26 +123,24 @@ class Grid:
     def save_csv(self, path: str | os.PathLike[str]) -> None:
         """Save grid data to a CSV file.
 
-        Format: letters section, blank line, colours section, blank line,
-        confidences section.  Block cells are ``#``, empty cells are blank.
+        Format: letters section, blank line, colours section. Block cells are
+        ``#``, empty cells are blank.
         """
         with open(path, "w", newline="") as f:
             w = csv.writer(f)
-            for row in self.cells:
-                w.writerow(_cell_to_letter_field(c) for c in row)
+            for r in range(self.rows):
+                w.writerow(_cell_to_letter_field(self.cell(r, c)) for c in range(self.cols))
             w.writerow([])
-            for row in self.cells:
-                w.writerow(_cell_to_colour_field(c) for c in row)
-            w.writerow([])
-            for row in self.cells:
-                w.writerow(_cell_to_confidence_field(c) for c in row)
+            for r in range(self.rows):
+                w.writerow(_cell_to_colour_field(self.cell(r, c)) for c in range(self.cols))
 
     @staticmethod
-    def load_csv(path: str | os.PathLike[str]) -> Grid:
+    def load_csv(path: str | os.PathLike[str]) -> RectangularGrid:
         """Load a grid from a CSV file written by :meth:`save_csv`.
 
-        The colours and confidences sections are optional — if absent, the grid
-        is constructed from letters alone.
+        The colours section is optional — if absent, the grid is constructed
+        from letters alone. Loaded cells have no associated image, so their
+        ``polygon`` is empty.
         """
         with open(path, newline="") as f:
             sections = _split_csv_sections(f.read())
@@ -120,37 +150,20 @@ class Grid:
 
         letter_rows = list(csv.reader(io.StringIO(sections[0])))
         colour_rows = list(csv.reader(io.StringIO(sections[1]))) if len(sections) > 1 else None
-        conf_rows = list(csv.reader(io.StringIO(sections[2]))) if len(sections) > 2 else None
 
         nrows = len(letter_rows)
         ncols = len(letter_rows[0]) if nrows else 0
 
-        dummy_box = BoundingBox(0, 0, 0, 0)
-        cells: list[list[Cell]] = []
+        cells: list[Cell] = []
         for r, row in enumerate(letter_rows):
-            cell_row: list[Cell] = []
             for c, val in enumerate(row):
                 kind, letter = _parse_letter_field(val)
                 bg: tuple[int, int, int] | None = None
                 if colour_rows and r < len(colour_rows) and c < len(colour_rows[r]):
                     bg = _parse_colour_field(colour_rows[r][c])
-                conf: float | None = None
-                if conf_rows and r < len(conf_rows) and c < len(conf_rows[r]):
-                    conf = _parse_confidence_field(conf_rows[r][c])
-                cell_row.append(
-                    Cell(
-                        row=r,
-                        col=c,
-                        box=dummy_box,
-                        kind=kind,
-                        letter=letter,
-                        confidence=conf,
-                        background=bg,
-                    )
-                )
-            cells.append(cell_row)
+                cells.append(Cell(kind=kind, letter=letter, background=bg))
 
-        return Grid(rows=nrows, cols=ncols, cells=cells)
+        return RectangularGrid(rows=nrows, cols=ncols, cells=cells)
 
 
 def _cell_to_letter_field(cell: Cell) -> str:
@@ -164,12 +177,6 @@ def _cell_to_letter_field(cell: Cell) -> str:
 def _cell_to_colour_field(cell: Cell) -> str:
     if cell.background is not None:
         return f"{cell.background[0]} {cell.background[1]} {cell.background[2]}"
-    return ""
-
-
-def _cell_to_confidence_field(cell: Cell) -> str:
-    if cell.confidence is not None:
-        return f"{cell.confidence:.4f}"
     return ""
 
 
@@ -190,13 +197,6 @@ def _parse_colour_field(val: str) -> tuple[int, int, int] | None:
     if len(parts) != 3:
         return None
     return int(parts[0]), int(parts[1]), int(parts[2])
-
-
-def _parse_confidence_field(val: str) -> float | None:
-    val = val.strip()
-    if not val:
-        return None
-    return float(val)
 
 
 def _split_csv_sections(text: str) -> list[str]:

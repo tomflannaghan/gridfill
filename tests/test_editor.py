@@ -2,47 +2,49 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from crossword_transcriber.editor import click_to_cell
-from crossword_transcriber.types import BoundingBox
+from crossword_transcriber.types import Cell, Point
 
 
-def _make_boxes(rows: int, cols: int, cell_size: int = 100) -> list[list[BoundingBox]]:
-    boxes: list[list[BoundingBox]] = []
+def _make_cells(rows: int, cols: int, cell_size: int = 100) -> tuple[list[Cell], tuple[int, int]]:
+    img_w, img_h = cols * cell_size, rows * cell_size
+    cells: list[Cell] = []
     for r in range(rows):
-        row: list[BoundingBox] = []
         for c in range(cols):
-            row.append(BoundingBox(c * cell_size, r * cell_size, cell_size, cell_size))
-        boxes.append(row)
-    return boxes
+            x0, y0 = c * cell_size, r * cell_size
+            x1, y1 = x0 + cell_size, y0 + cell_size
+            polygon: list[Point] = [
+                (x0 / img_w, y0 / img_h),
+                (x1 / img_w, y0 / img_h),
+                (x1 / img_w, y1 / img_h),
+                (x0 / img_w, y1 / img_h),
+            ]
+            cells.append(Cell(polygon=polygon))
+    return cells, (img_w, img_h)
 
 
 class TestClickToCell:
     def test_identity_transform_hit(self) -> None:
-        boxes = _make_boxes(3, 3, cell_size=100)
-        transform = np.eye(3, dtype=np.float32)
-        result = click_to_cell(150.0, 50.0, scale=1.0, transform=transform, boxes=boxes)
-        assert result == (0, 1)
+        cells, size = _make_cells(3, 3, cell_size=100)
+        result = click_to_cell(150.0, 50.0, scale=1.0, image_size=size, cells=cells)
+        assert result == 1
 
     def test_identity_transform_scaled(self) -> None:
-        boxes = _make_boxes(3, 3, cell_size=100)
-        transform = np.eye(3, dtype=np.float32)
-        result = click_to_cell(75.0, 25.0, scale=0.5, transform=transform, boxes=boxes)
-        assert result == (0, 1)
+        cells, size = _make_cells(3, 3, cell_size=100)
+        result = click_to_cell(75.0, 25.0, scale=0.5, image_size=size, cells=cells)
+        assert result == 1
 
     def test_outside_grid(self) -> None:
-        boxes = _make_boxes(2, 2, cell_size=100)
-        transform = np.eye(3, dtype=np.float32)
-        result = click_to_cell(250.0, 250.0, scale=1.0, transform=transform, boxes=boxes)
+        cells, size = _make_cells(2, 2, cell_size=100)
+        result = click_to_cell(250.0, 250.0, scale=1.0, image_size=size, cells=cells)
         assert result is None
 
     def test_bottom_right_cell(self) -> None:
-        boxes = _make_boxes(3, 3, cell_size=100)
-        transform = np.eye(3, dtype=np.float32)
-        result = click_to_cell(250.0, 250.0, scale=1.0, transform=transform, boxes=boxes)
-        assert result == (2, 2)
+        cells, size = _make_cells(3, 3, cell_size=100)
+        result = click_to_cell(250.0, 250.0, scale=1.0, image_size=size, cells=cells)
+        assert result == 8
 
 
 def test_cli_edit_help() -> None:

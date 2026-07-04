@@ -21,7 +21,7 @@ crossword-transcriber edit scan.png -o filled_out.png
 from crossword_transcriber import edit_grid
 
 # Opens an interactive editor window for every grid found in the image.
-# Returns the edited Grid objects when the window is closed.
+# Returns the edited RectangularGrid objects when the window is closed.
 grids = edit_grid("scan.png", out_path="filled_out.png")
 ```
 

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 import crossword_transcriber as ct
-from crossword_transcriber.types import BoundingBox, Cell, CellKind, Grid
+from crossword_transcriber.types import BoundingBox, Cell, CellKind, Grid, RectangularGrid
 
 
 def test_public_api_exports() -> None:
@@ -17,17 +19,47 @@ def test_bounding_box_corners() -> None:
     assert box.y2 == 60
 
 
-def _cell(row: int, col: int, kind: CellKind, letter: str | None = None) -> Cell:
-    return Cell(row=row, col=col, box=BoundingBox(0, 0, 1, 1), kind=kind, letter=letter)
+def test_cell_default_polygon_is_empty() -> None:
+    assert Cell().polygon == []
+
+
+def test_grid_is_abstract() -> None:
+    with pytest.raises(TypeError):
+        Grid()  # type: ignore[abstract]
+
+
+def _cell(kind: CellKind, letter: str | None = None) -> Cell:
+    return Cell(kind=kind, letter=letter)
 
 
 def test_grid_to_letters_maps_each_kind() -> None:
     cells = [
-        [
-            _cell(0, 0, CellKind.BLOCK),
-            _cell(0, 1, CellKind.EMPTY),
-            _cell(0, 2, CellKind.LETTER, "A"),
-        ]
+        _cell(CellKind.BLOCK),
+        _cell(CellKind.EMPTY),
+        _cell(CellKind.LETTER, "A"),
     ]
-    grid = Grid(rows=1, cols=3, cells=cells)
+    grid = RectangularGrid(rows=1, cols=3, cells=cells)
     assert grid.to_letters() == [[None, "", "A"]]
+
+
+def test_rectangular_grid_cell_indexing() -> None:
+    cells = [_cell(CellKind.LETTER, letter) for letter in "ABCDEF"]
+    grid = RectangularGrid(rows=2, cols=3, cells=cells)
+    assert grid.cell(0, 0).letter == "A"
+    assert grid.cell(0, 2).letter == "C"
+    assert grid.cell(1, 0).letter == "D"
+    assert grid.cell(1, 2).letter == "F"
+
+
+def test_rectangular_grid_bounding_polygon() -> None:
+    def poly(x0: float, y0: float, x1: float, y1: float) -> list[tuple[float, float]]:
+        return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+
+    cells = [
+        Cell(polygon=poly(0.0, 0.0, 0.5, 0.5)),
+        Cell(polygon=poly(0.5, 0.0, 1.0, 0.5)),
+        Cell(polygon=poly(0.0, 0.5, 0.5, 1.0)),
+        Cell(polygon=poly(0.5, 0.5, 1.0, 1.0)),
+    ]
+    grid = RectangularGrid(rows=2, cols=2, cells=cells)
+    assert grid.bounding_polygon() == [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]

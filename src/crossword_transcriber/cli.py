@@ -14,12 +14,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     p_edit.add_argument("image", help="Path to the grid image.")
     p_edit.add_argument("-o", "--out", help="Default output path for saving the rendered image.")
     p_edit.add_argument("--font", help="Path to a TrueType font file.")
-    p_edit.add_argument(
-        "--highlight-confidence",
-        type=float,
-        metavar="THRESH",
-        help="Highlight cells with confidence below this threshold.",
-    )
 
     args = parser.parse_args(argv)
 
@@ -30,7 +24,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.image,
             out_path=args.out,
             font_path=args.font,
-            highlight_confidence=args.highlight_confidence,
         )
         return 0
 

@@ -14,16 +14,15 @@ import pytest
 
 from crossword_transcriber.detection import detect_grid
 from crossword_transcriber.preprocess import binarize, to_grayscale
-from crossword_transcriber.segmentation import infer_cell_boxes
+from crossword_transcriber.types import RectangularGrid
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def _detect_cells(name: str) -> list[list]:
+def _detect(name: str) -> RectangularGrid:
     image = cv2.imread(str(FIXTURES / name))
     assert image is not None, f"missing fixture {name}"
-    detected = detect_grid(binarize(to_grayscale(image)))
-    return infer_cell_boxes(detected.line_mask)
+    return detect_grid(binarize(to_grayscale(image)))
 
 
 @pytest.mark.parametrize(
@@ -37,6 +36,6 @@ def _detect_cells(name: str) -> list[list]:
     ],
 )
 def test_fixtures_detect_exact_grid(name: str, rows: int, cols: int) -> None:
-    boxes = _detect_cells(name)
-    assert len(boxes) == rows
-    assert all(len(row) == cols for row in boxes)
+    grid = _detect(name)
+    assert grid.rows == rows
+    assert grid.cols == cols

@@ -12,11 +12,18 @@ import cv2
 import numpy as np
 
 from .errors import GridDetectionError, MultipleGridsError
+from .segmentation import infer_cell_boxes
+from .types import BoundingBox, Cell, Point, RectangularGrid
 
 
 @dataclass
-class DetectedGrid:
-    """The rectified grid lattice plus the transform that produced it."""
+class _RectifiedLattice:
+    """The rectified grid lattice plus the transform that produced it.
+
+    Purely an internal intermediate: nothing outside this module needs the
+    rectified mask or transform once the public functions below have turned it
+    into a :class:`RectangularGrid`.
+    """
 
     # Rectified, axis-aligned binary line mask containing just the grid lattice.
     line_mask: np.ndarray
@@ -106,8 +113,8 @@ def _find_grid_quads(line_mask: np.ndarray) -> list[np.ndarray]:
     return [quad for row in rows for _, _, quad in row]
 
 
-def _rectify_quad(line_mask: np.ndarray, quad: np.ndarray) -> DetectedGrid:
-    """Compute a perspective-rectified DetectedGrid from a single quad."""
+def _rectify_quad(line_mask: np.ndarray, quad: np.ndarray) -> _RectifiedLattice:
+    """Compute a perspective-rectified lattice from a single quad."""
     top_left, top_right, bottom_right, bottom_left = quad
 
     width = int(
@@ -135,25 +142,63 @@ def _rectify_quad(line_mask: np.ndarray, quad: np.ndarray) -> DetectedGrid:
     )
     transform = cv2.getPerspectiveTransform(quad, dst)
     rectified = cv2.warpPerspective(line_mask, transform, (width, height))
-    return DetectedGrid(line_mask=rectified, transform=transform, size=(width, height))
+    return _RectifiedLattice(line_mask=rectified, transform=transform, size=(width, height))
 
 
-def detect_grids(binary: np.ndarray) -> list[DetectedGrid]:
-    """Detect all crossword grids in the image, sorted in reading order."""
+def _polygon_from_box(
+    box: BoundingBox, inverse: np.ndarray, src_size: tuple[int, int]
+) -> list[Point]:
+    """Project a rectified-space box's 4 corners back to normalized source coords."""
+    src_w, src_h = src_size
+    corners = np.array(
+        [[box.x, box.y], [box.x2, box.y], [box.x2, box.y2], [box.x, box.y2]],
+        dtype=np.float64,
+    )
+    homogeneous = np.hstack([corners, np.ones((4, 1))])
+    projected = homogeneous @ inverse.T
+    projected = projected[:, :2] / projected[:, 2:3]
+    projected[:, 0] /= src_w
+    projected[:, 1] /= src_h
+    return [(float(x), float(y)) for x, y in projected]
+
+
+def _build_rectangular_grid(
+    src_shape: tuple[int, ...], lattice: _RectifiedLattice
+) -> RectangularGrid:
+    """Segment a rectified lattice into cells and project them onto the source image."""
+    boxes = infer_cell_boxes(lattice.line_mask)
+    rows, cols = len(boxes), len(boxes[0])
+    inverse = np.linalg.inv(lattice.transform)
+    src_h, src_w = src_shape[:2]
+    cells = [
+        Cell(polygon=_polygon_from_box(box, inverse, (src_w, src_h)))
+        for row in boxes
+        for box in row
+    ]
+    return RectangularGrid(rows=rows, cols=cols, cells=cells)
+
+
+def detect_grids(binary: np.ndarray) -> list[RectangularGrid]:
+    """Detect all crossword grids in the image, sorted in reading order.
+
+    May raise :class:`GridSegmentationError` if a lattice is found but its
+    cells can't be resolved into rows/columns.
+    """
     line_mask = extract_line_mask(binary)
     quads = _find_grid_quads(line_mask)
-    return [_rectify_quad(line_mask, quad) for quad in quads]
+    return [_build_rectangular_grid(binary.shape, _rectify_quad(line_mask, quad)) for quad in quads]
 
 
-def detect_grid(binary: np.ndarray, grid_index: int | None = None) -> DetectedGrid:
-    """Locate a crossword lattice on the page and rectify it.
+def detect_grid(binary: np.ndarray, grid_index: int | None = None) -> RectangularGrid:
+    """Locate a crossword lattice on the page and segment it into a grid.
 
     When the image contains multiple grids, *grid_index* (1-based, reading
     left-to-right then top-to-bottom) selects which grid to return. If the
     image contains a single grid, *grid_index* may be omitted.
 
     Raises :class:`MultipleGridsError` when multiple grids are found and no
-    *grid_index* is given.
+    *grid_index* is given, or :class:`GridSegmentationError` if a lattice is
+    found but its cells can't be resolved into rows/columns.
     """
     grids = detect_grids(binary)
 

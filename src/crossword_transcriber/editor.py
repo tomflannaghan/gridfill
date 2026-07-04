@@ -14,30 +14,36 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
-from .detection import DetectedGrid, detect_grids
+from .detection import detect_grids
 from .fonts import FontT, _best_grid, fit_font_size, fit_font_size_multi, font_loader
+from .geometry import (
+    bounding_rect,
+    canvas_to_quad_homography,
+    inset_quad,
+    point_in_polygon,
+    polygon_to_pixels,
+    quad_size,
+)
 from .io import ImageSource, load_image, save_image
 from .preprocess import binarize, to_grayscale
-from .segmentation import infer_cell_boxes
-from .types import BoundingBox, Cell, CellKind, Grid
+from .types import Cell, CellKind, RectangularGrid
 
 _SELECTION_BGR = (255, 180, 0)
-_HIGHLIGHT_BGR = (50, 50, 255)
 _DEFAULT_HIGHLIGHT_COLOR_BGR = (0, 255, 255)
 _ACTIVE_GRID_BGR = (0, 180, 0)
 _WHITE_DISTANCE_THRESHOLD = 30
 _MAX_DISPLAY_SIZE = 900
+_CELL_FILL_INSET_FRAC = 0.06
+_CELL_RASTER_MIN = 24
 
 
 @dataclass
 class _GridState:
     """Per-grid data needed by the editor."""
 
-    detected: DetectedGrid
-    boxes: list[list[BoundingBox]]
-    grid: Grid
-    inverse: np.ndarray
+    grid: RectangularGrid
     single_font: ImageFont.FreeTypeFont
+    ref_cell_size: tuple[int, int]
     multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont] = field(default_factory=dict)
 
 
@@ -46,37 +52,28 @@ def edit_grid(
     out_path: str | os.PathLike[str] | None = None,
     font_path: str | os.PathLike[str] | None = None,
     color: tuple[int, int, int] = (0, 0, 0),
-    highlight_confidence: float | None = None,
-) -> list[Grid]:
+) -> list[RectangularGrid]:
     """Open an interactive editor for all grids found in *source*.
 
     Each grid detected in the image gets its own editing state.  Click a cell
     to select its grid; Save CSV applies to the active grid.
 
-    Returns a list of edited :class:`Grid` objects (one per detected grid).
+    Returns a list of edited :class:`RectangularGrid` objects (one per
+    detected grid).
     """
     image = load_image(source).copy()
     binary = binarize(to_grayscale(image))
-    detected_list = detect_grids(binary)
+    grids = detect_grids(binary)
 
+    src_h, src_w = image.shape[:2]
     loader = font_loader(font_path)
     grid_states: list[_GridState] = []
-    for detected in detected_list:
-        boxes = infer_cell_boxes(detected.line_mask)
-        rows, cols = len(boxes), len(boxes[0])
-        cells = [[Cell(row=r, col=c, box=boxes[r][c]) for c in range(cols)] for r in range(rows)]
-        grid = Grid(rows=rows, cols=cols, cells=cells, transform=detected.transform)
-        inverse = np.linalg.inv(detected.transform)
-        sample = boxes[0][0]
-        single_font = loader(fit_font_size(loader, sample.width, sample.height))
+    for grid in grids:
+        sample_px = polygon_to_pixels(grid.cell(0, 0).polygon, (src_w, src_h))
+        ref_w, ref_h = quad_size(sample_px)
+        single_font = loader(fit_font_size(loader, ref_w, ref_h))
         grid_states.append(
-            _GridState(
-                detected=detected,
-                boxes=boxes,
-                grid=grid,
-                inverse=inverse,
-                single_font=single_font,
-            )
+            _GridState(grid=grid, single_font=single_font, ref_cell_size=(ref_w, ref_h))
         )
 
     editor = _GridEditor(
@@ -84,7 +81,6 @@ def edit_grid(
         grid_states=grid_states,
         loader=loader,
         color=color,
-        highlight_confidence=highlight_confidence,
         out_path=out_path,
     )
     editor.mainloop()
@@ -95,19 +91,16 @@ def click_to_cell(
     click_x: float,
     click_y: float,
     scale: float,
-    transform: np.ndarray,
-    boxes: list[list[BoundingBox]],
-) -> tuple[int, int] | None:
-    """Map a display-space click to a grid cell, or ``None`` if outside."""
+    image_size: tuple[int, int],
+    cells: list[Cell],
+) -> int | None:
+    """Map a display-space click to a flat index into *cells*, or ``None``."""
     sx = click_x / scale
     sy = click_y / scale
-    pt = np.array([[[sx, sy]]], dtype=np.float32)
-    rectified = cv2.perspectiveTransform(pt, transform)[0][0]
-    rx, ry = float(rectified[0]), float(rectified[1])
-    for r, row in enumerate(boxes):
-        for c, box in enumerate(row):
-            if box.x <= rx < box.x2 and box.y <= ry < box.y2:
-                return (r, c)
+    for i, cell in enumerate(cells):
+        polygon_px = polygon_to_pixels(cell.polygon, image_size)
+        if point_in_polygon(sx, sy, polygon_px):
+            return i
     return None
 
 
@@ -120,7 +113,6 @@ class _GridEditor(tk.Tk):
         grid_states: list[_GridState],
         loader: Callable[[int], FontT],
         color: tuple[int, int, int],
-        highlight_confidence: float | None,
         out_path: str | os.PathLike[str] | None,
     ) -> None:
         super().__init__()
@@ -128,7 +120,6 @@ class _GridEditor(tk.Tk):
 
         self._grid_states = grid_states
         self._color = color
-        self._highlight_confidence = highlight_confidence
         self._highlight_color = _DEFAULT_HIGHLIGHT_COLOR_BGR
         self._out_path = out_path
         self._image = image
@@ -137,7 +128,7 @@ class _GridEditor(tk.Tk):
         src_h, src_w = image.shape[:2]
         self._src_size = (src_w, src_h)
 
-        self._base_image = self._compute_base_image(image, grid_states, highlight_confidence)
+        self._base_image = self._compute_base_image(image, grid_states)
 
         scale = min(_MAX_DISPLAY_SIZE / src_w, _MAX_DISPLAY_SIZE / src_h, 1.0)
         self._display_w = int(src_w * scale)
@@ -175,9 +166,10 @@ class _GridEditor(tk.Tk):
     def _find_click_target(self, event_x: float, event_y: float) -> tuple[int, int, int] | None:
         """Return ``(grid_index, row, col)`` or ``None``."""
         for gi, gs in enumerate(self._grid_states):
-            hit = click_to_cell(event_x, event_y, self._scale, gs.detected.transform, gs.boxes)
-            if hit is not None:
-                return (gi, hit[0], hit[1])
+            idx = click_to_cell(event_x, event_y, self._scale, self._src_size, gs.grid.cells)
+            if idx is not None:
+                r, c = divmod(idx, gs.grid.cols)
+                return (gi, r, c)
         return None
 
     # ------------------------------------------------------------------
@@ -231,10 +223,9 @@ class _GridEditor(tk.Tk):
         if gs is None or self._selected is None:
             return
         r, c = self._selected
-        cell = gs.grid.cells[r][c]
+        cell = gs.grid.cell(r, c)
         cell.letter = None
         cell.kind = CellKind.EMPTY
-        cell.confidence = None
         self._render_and_display()
 
     def _deselect(self) -> None:
@@ -247,156 +238,122 @@ class _GridEditor(tk.Tk):
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _cell_highlight_color(cell: Cell) -> tuple[int, int, int] | None:
+        bg = cell.background
+        if bg is None:
+            return None
+        dist = sum((a - 255) ** 2 for a in bg)
+        if dist < _WHITE_DISTANCE_THRESHOLD**2:
+            return None
+        return bg
+
+    @classmethod
     def _compute_base_image(
+        cls,
         image: np.ndarray,
         grid_states: list[_GridState],
-        highlight_confidence: float | None,
     ) -> np.ndarray:
         src_h, src_w = image.shape[:2]
-        result = image.copy()
+        result = image.astype(np.float32).copy()
 
         for gs in grid_states:
-            width, height = gs.detected.size
-            line_mask_bool = gs.detected.line_mask > 0
-            bg_layer = np.zeros((height, width, 3), dtype=np.uint8)
-            bg_mask = np.zeros((height, width), dtype=np.uint8)
+            for cell in gs.grid.cells:
+                if cell.kind is CellKind.BLOCK:
+                    continue
+                bg = cls._cell_highlight_color(cell)
+                if bg is None:
+                    continue
+                polygon_px = polygon_to_pixels(cell.polygon, (src_w, src_h))
+                inset_px = inset_quad(polygon_px, _CELL_FILL_INSET_FRAC)
+                x0, y0, x1, y1 = bounding_rect(inset_px, (src_w, src_h))
+                if x1 <= x0 or y1 <= y0:
+                    continue
+                mask = np.zeros((y1 - y0, x1 - x0), dtype=np.uint8)
+                cv2.fillConvexPoly(mask, (inset_px - [x0, y0]).astype(np.int32), 255)
+                alpha = (mask.astype(np.float32) / 255.0)[:, :, None]
+                fill = np.array(bg, dtype=np.float32).reshape(1, 1, 3)
+                result[y0:y1, x0:x1] = result[y0:y1, x0:x1] * (1 - alpha) + fill * alpha
 
-            for row_boxes, row_cells in zip(gs.boxes, gs.grid.cells, strict=True):
-                for box, cell in zip(row_boxes, row_cells, strict=True):
-                    if cell.kind is CellKind.BLOCK:
-                        continue
-                    bg: tuple[int, int, int] | None = None
-                    if (
-                        highlight_confidence is not None
-                        and cell.confidence is not None
-                        and cell.confidence < highlight_confidence
-                    ):
-                        bg = _HIGHLIGHT_BGR
-                    elif cell.background is not None:
-                        bg = cell.background
-                    if bg is None:
-                        continue
-                    if bg != _HIGHLIGHT_BGR:
-                        dist = sum((a - 255) ** 2 for a in bg)
-                        if dist < _WHITE_DISTANCE_THRESHOLD**2:
-                            continue
-                    bg_layer[box.y : box.y2, box.x : box.x2] = bg
-                    bg_mask[box.y : box.y2, box.x : box.x2] = 255
+        return np.asarray(np.clip(result, 0, 255).round().astype(np.uint8))
 
-            bg_mask[line_mask_bool] = 0
-
-            if bg_mask.any():
-                warped_bg = cv2.warpPerspective(bg_layer, gs.inverse, (src_w, src_h))
-                warped_mask = cv2.warpPerspective(bg_mask, gs.inverse, (src_w, src_h))
-                alpha = (warped_mask.astype(np.float32) / 255.0)[:, :, None]
-                result = np.asarray(
-                    (result.astype(np.float32) * (1 - alpha) + warped_bg.astype(np.float32) * alpha)
-                    .round()
-                    .astype(np.uint8)
-                )
-
-        return result
+    def _recompute_base(self) -> None:
+        self._base_image = self._compute_base_image(self._image, self._grid_states)
 
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
 
-    def _render(self, *, for_save: bool = False) -> np.ndarray:
+    def _draw_letter_in_cell(self, result: np.ndarray, gs: _GridState, cell: Cell) -> None:
+        text = (cell.letter or "").upper()
+        if not text:
+            return
         src_w, src_h = self._src_size
+        polygon_px = polygon_to_pixels(cell.polygon, (src_w, src_h))
+        canvas_w, canvas_h = quad_size(polygon_px)
+        canvas_w = max(canvas_w, _CELL_RASTER_MIN)
+        canvas_h = max(canvas_h, _CELL_RASTER_MIN)
+
+        canvas = Image.new("L", (canvas_w, canvas_h), 0)
+        draw = ImageDraw.Draw(canvas)
+        if len(text) == 1:
+            draw.text(
+                (canvas_w / 2, canvas_h / 2),
+                text,
+                font=gs.single_font,
+                fill=255,
+                anchor="mm",
+            )
+        else:
+            ref_w, ref_h = gs.ref_cell_size
+            grid_shape = _best_grid(len(text), ref_w, ref_h)
+            if grid_shape not in gs.multi_font_cache:
+                size = fit_font_size_multi(self._loader, ref_w, ref_h, grid_shape[0], grid_shape[1])
+                gs.multi_font_cache[grid_shape] = self._loader(size)
+            font = gs.multi_font_cache[grid_shape]
+            nrows, ncols = grid_shape
+            slot_w, slot_h = canvas_w / ncols, canvas_h / nrows
+            for i, ch in enumerate(text):
+                ri, ci = divmod(i, ncols)
+                draw.text(
+                    ((ci + 0.5) * slot_w, (ri + 0.5) * slot_h),
+                    ch,
+                    font=font,
+                    fill=255,
+                    anchor="mm",
+                )
+
+        x0, y0, x1, y1 = bounding_rect(polygon_px, (src_w, src_h), margin=1)
+        if x1 <= x0 or y1 <= y0:
+            return
+        homography = canvas_to_quad_homography((canvas_w, canvas_h), polygon_px - [x0, y0])
+        warped_alpha = cv2.warpPerspective(np.array(canvas), homography, (x1 - x0, y1 - y0))
+        alpha = (warped_alpha.astype(np.float32) / 255.0)[:, :, None]
         fill = np.array(self._color, dtype=np.float32).reshape(1, 1, 3)
-        result_f = self._base_image.astype(np.float32)
+        roi = result[y0:y1, x0:x1].astype(np.float32)
+        result[y0:y1, x0:x1] = np.clip(roi * (1 - alpha) + fill * alpha, 0, 255).round()
+
+    def _render(self, *, for_save: bool = False) -> np.ndarray:
+        result = self._base_image.copy()
 
         for gs in self._grid_states:
-            width, height = gs.detected.size
-            letter_grid = gs.grid.to_letters()
-
-            for lr in letter_grid:
-                for lv in lr:
-                    if lv and len(lv) > 1:
-                        gr = _best_grid(len(lv), gs.boxes[0][0].width, gs.boxes[0][0].height)
-                        if gr not in gs.multi_font_cache:
-                            sz = fit_font_size_multi(
-                                self._loader,
-                                gs.boxes[0][0].width,
-                                gs.boxes[0][0].height,
-                                gr[0],
-                                gr[1],
-                            )
-                            gs.multi_font_cache[gr] = self._loader(sz)
-
-            mask = Image.new("L", (width, height), 0)
-            draw = ImageDraw.Draw(mask)
-
-            for row, letter_row in zip(gs.boxes, letter_grid, strict=True):
-                for box, letter in zip(row, letter_row, strict=True):
-                    if not letter:
-                        continue
-                    text = letter.upper()
-                    if len(text) == 1:
-                        cx = box.x + box.width / 2
-                        cy = box.y + box.height / 2
-                        draw.text(
-                            (cx, cy),
-                            text,
-                            font=gs.single_font,
-                            fill=255,
-                            anchor="mm",
-                        )
-                    else:
-                        ref = gs.boxes[0][0]
-                        nrows, ncols = _best_grid(len(text), ref.width, ref.height)
-                        font = gs.multi_font_cache[(nrows, ncols)]
-                        slot_w = box.width / ncols
-                        slot_h = box.height / nrows
-                        for i, ch in enumerate(text):
-                            ri = i // ncols
-                            ci = i % ncols
-                            cx = box.x + (ci + 0.5) * slot_w
-                            cy = box.y + (ri + 0.5) * slot_h
-                            draw.text(
-                                (cx, cy),
-                                ch,
-                                font=font,
-                                fill=255,
-                                anchor="mm",
-                            )
-
-            warped = cv2.warpPerspective(np.array(mask), gs.inverse, (src_w, src_h))
-            alpha = (warped.astype(np.float32) / 255.0)[:, :, None]
-            result_f = result_f * (1 - alpha) + fill * alpha
-
-        result = np.asarray(result_f.round().astype(np.uint8))
+            for cell in gs.grid.cells:
+                if cell.kind is CellKind.LETTER and cell.letter:
+                    self._draw_letter_in_cell(result, gs, cell)
 
         # Active grid indicator
         if not for_save and self._active_grid_index is not None and len(self._grid_states) > 1:
             gs = self._grid_states[self._active_grid_index]
-            rect_w, rect_h = gs.detected.size
-            corners = np.array(
-                [[[0, 0], [rect_w, 0], [rect_w, rect_h], [0, rect_h]]],
-                dtype=np.float32,
-            )
-            src_corners = cv2.perspectiveTransform(corners, gs.inverse)[0].astype(np.int32)
-            cv2.polylines(result, [src_corners], True, _ACTIVE_GRID_BGR, 3)
+            hull_px = polygon_to_pixels(gs.grid.bounding_polygon(), self._src_size).astype(np.int32)
+            cv2.polylines(result, [hull_px], True, _ACTIVE_GRID_BGR, 3)
 
         # Cell selection highlight
         if not for_save and self._selected is not None and self._active_grid_index is not None:
             gs = self._grid_states[self._active_grid_index]
             r, c = self._selected
-            box = gs.boxes[r][c]
-            corners = np.array(
-                [
-                    [
-                        [box.x, box.y],
-                        [box.x2, box.y],
-                        [box.x2, box.y2],
-                        [box.x, box.y2],
-                    ]
-                ],
-                dtype=np.float32,
-            )
-            src_corners = cv2.perspectiveTransform(corners, gs.inverse)[0].astype(np.int32)
+            cell = gs.grid.cell(r, c)
+            poly_px = polygon_to_pixels(cell.polygon, self._src_size).astype(np.int32)
             thickness = 5 if self._multi_entry else 3
-            cv2.polylines(result, [src_corners], True, _SELECTION_BGR, thickness)
+            cv2.polylines(result, [poly_px], True, _SELECTION_BGR, thickness)
 
         # Text annotations
         if self._annotations:
@@ -437,7 +394,7 @@ class _GridEditor(tk.Tk):
         target = self._find_click_target(event.x, event.y)
         if target is not None:
             gi, r, c = target
-            cell = self._grid_states[gi].grid.cells[r][c]
+            cell = self._grid_states[gi].grid.cell(r, c)
             if cell.kind is CellKind.BLOCK:
                 self._active_grid_index = gi
                 self._selected = None
@@ -457,7 +414,7 @@ class _GridEditor(tk.Tk):
             self._add_annotation(event.x, event.y)
             return
         gi, r, c = target
-        cell = self._grid_states[gi].grid.cells[r][c]
+        cell = self._grid_states[gi].grid.cell(r, c)
         if cell.kind is CellKind.BLOCK:
             return
         self._active_grid_index = gi
@@ -512,13 +469,12 @@ class _GridEditor(tk.Tk):
             return
 
         if event.keysym == "BackSpace":
-            cell = gs.grid.cells[r][c]
+            cell = gs.grid.cell(r, c)
             if self._multi_entry and cell.letter and len(cell.letter) > 1:
                 cell.letter = cell.letter[:-1]
             elif cell.kind is CellKind.LETTER:
                 cell.letter = None
                 cell.kind = CellKind.EMPTY
-                cell.confidence = None
             else:
                 self._retreat_selection()
                 self._clear_selected_cell()
@@ -531,13 +487,12 @@ class _GridEditor(tk.Tk):
 
         ch = event.char.upper()
         if ch and ch.isalnum() and len(ch) == 1:
-            cell = gs.grid.cells[r][c]
+            cell = gs.grid.cell(r, c)
             if self._multi_entry:
                 cell.letter = (cell.letter or "") + ch
             else:
                 cell.letter = ch
             cell.kind = CellKind.LETTER
-            cell.confidence = None
             if not self._multi_entry:
                 self._advance_selection()
             self._render_and_display()
@@ -567,7 +522,7 @@ class _GridEditor(tk.Tk):
                 r += 1
             if r >= rows:
                 r = 0
-            if gs.grid.cells[r][c].kind is not CellKind.BLOCK:
+            if gs.grid.cell(r, c).kind is not CellKind.BLOCK:
                 self._selected = (r, c)
                 return
 
@@ -584,7 +539,7 @@ class _GridEditor(tk.Tk):
                 r -= 1
             if r < 0:
                 r = rows - 1
-            if gs.grid.cells[r][c].kind is not CellKind.BLOCK:
+            if gs.grid.cell(r, c).kind is not CellKind.BLOCK:
                 self._selected = (r, c)
                 return
 
@@ -614,7 +569,7 @@ class _GridEditor(tk.Tk):
         if gs is None or self._selected is None:
             return
         r, c = self._selected
-        cell = gs.grid.cells[r][c]
+        cell = gs.grid.cell(r, c)
         if cell.kind is CellKind.BLOCK:
             return
         if cell.background == self._highlight_color:
@@ -634,13 +589,6 @@ class _GridEditor(tk.Tk):
             return
         rgb = result[0]
         self._highlight_color = (int(rgb[2]), int(rgb[1]), int(rgb[0]))
-
-    def _recompute_base(self) -> None:
-        self._base_image = self._compute_base_image(
-            self._image,
-            self._grid_states,
-            self._highlight_confidence,
-        )
 
     # ------------------------------------------------------------------
     # Save

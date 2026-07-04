@@ -9,16 +9,17 @@ from __future__ import annotations
 
 from .editor import edit_grid
 from .errors import GridDetectionError, MultipleGridsError
-from .types import BoundingBox, Cell, CellKind, Grid, LetterGrid
+from .types import Cell, CellKind, Grid, LetterGrid, Point, RectangularGrid
 
 __version__ = "0.1.0"
 
 __all__ = [
     "edit_grid",
     "Grid",
+    "RectangularGrid",
     "Cell",
     "CellKind",
-    "BoundingBox",
+    "Point",
     "LetterGrid",
     "GridDetectionError",
     "MultipleGridsError",
