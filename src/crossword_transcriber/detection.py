@@ -11,7 +11,7 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from .errors import GridDetectionError, MultipleGridsError
+from .errors import GridDetectionError, GridSegmentationError, MultipleGridsError
 from .segmentation import infer_cell_boxes
 from .types import BoundingBox, Cell, Point, RectangularGrid
 
@@ -61,7 +61,7 @@ def _order_corners(pts: np.ndarray) -> np.ndarray:
     return rect
 
 
-_MIN_AREA_RATIO = 0.10
+_MIN_ABS_AREA = 16.0
 _ROW_BAND_FRAC = 0.10
 
 
@@ -77,22 +77,24 @@ def _contour_to_quad(contour: np.ndarray) -> np.ndarray:
 
 
 def _find_grid_quads(line_mask: np.ndarray) -> list[np.ndarray]:
-    """Find quads for all grid lattices, sorted in reading order."""
+    """Find quads for all grid lattices, sorted in reading order.
+
+    Candidates are filtered on absolute area only (not relative to the
+    largest grid found): a single-row or single-column grid can be far
+    smaller in area than a neighbouring full grid, so a size-ratio cutoff
+    would discard it. Non-lattice shapes that sneak past this floor (stray
+    strokes, badges) get rejected later when they fail to segment into a
+    row/column lattice.
+    """
     contours, _ = cv2.findContours(line_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         raise GridDetectionError("No line structure found in image")
 
-    areas = [cv2.contourArea(c) for c in contours]
-    max_area = max(areas)
-    if max_area <= 0:
-        raise GridDetectionError("Largest line contour has no area")
-
-    min_area = max_area * _MIN_AREA_RATIO
     h = line_mask.shape[0]
 
     quads: list[tuple[float, float, np.ndarray]] = []
-    for contour, area in zip(contours, areas, strict=True):
-        if area < min_area:
+    for contour in contours:
+        if cv2.contourArea(contour) < _MIN_ABS_AREA:
             continue
         quad = _contour_to_quad(contour)
         cx = float(quad[:, 0].mean())
@@ -163,10 +165,9 @@ def _polygon_from_box(
 
 
 def _build_rectangular_grid(
-    src_shape: tuple[int, ...], lattice: _RectifiedLattice
+    src_shape: tuple[int, ...], lattice: _RectifiedLattice, boxes: list[list[BoundingBox]]
 ) -> RectangularGrid:
-    """Segment a rectified lattice into cells and project them onto the source image."""
-    boxes = infer_cell_boxes(lattice.line_mask)
+    """Turn a rectified lattice's cell boxes into a grid, projected onto the source image."""
     rows, cols = len(boxes), len(boxes[0])
     inverse = np.linalg.inv(lattice.transform)
     src_h, src_w = src_shape[:2]
@@ -178,15 +179,61 @@ def _build_rectangular_grid(
     return RectangularGrid(rows=rows, cols=cols, cells=cells)
 
 
+def _segment_quad(
+    line_mask: np.ndarray, quad: np.ndarray
+) -> tuple[_RectifiedLattice, list[list[BoundingBox]]] | None:
+    """Rectify and segment one candidate quad, or None if it isn't a real lattice."""
+    try:
+        lattice = _rectify_quad(line_mask, quad)
+        boxes = infer_cell_boxes(lattice.line_mask)
+    except (GridDetectionError, GridSegmentationError):
+        return None
+    return lattice, boxes
+
+
+def _cell_pitch(lattice: _RectifiedLattice, boxes: list[list[BoundingBox]]) -> tuple[float, float]:
+    """Average (col_pitch, row_pitch) -- i.e. per-cell width and height -- of a lattice."""
+    rows, cols = len(boxes), len(boxes[0])
+    width, height = lattice.size
+    return width / cols, height / rows
+
+
+_PITCH_TOLERANCE = 0.20
+
+
 def detect_grids(binary: np.ndarray) -> list[RectangularGrid]:
     """Detect all crossword grids in the image, sorted in reading order.
 
-    May raise :class:`GridSegmentationError` if a lattice is found but its
-    cells can't be resolved into rows/columns.
+    Candidate quads that don't resolve into a row/column lattice at all (too
+    few lines, a degenerate size) are skipped outright. Quads that do, but
+    whose cell size is way off from the page's dominant grid -- a badge, logo,
+    or stray stroke that happens to bound a tiny 1x1 or 2x1 lattice -- are
+    skipped too: real auxiliary grids on a crossword page (including
+    single-row/single-column ones) share the same cell pitch as the main
+    grid, so a mismatch is a strong signal it isn't actually a grid.
     """
     line_mask = extract_line_mask(binary)
-    quads = _find_grid_quads(line_mask)
-    return [_build_rectangular_grid(binary.shape, _rectify_quad(line_mask, quad)) for quad in quads]
+    candidates = [
+        result for quad in _find_grid_quads(line_mask) if (result := _segment_quad(line_mask, quad))
+    ]
+    if not candidates:
+        raise GridDetectionError("No valid grid lattice found in image")
+
+    reference_lattice, reference_boxes = max(candidates, key=lambda c: len(c[1]) * len(c[1][0]))
+    ref_col_pitch, ref_row_pitch = _cell_pitch(reference_lattice, reference_boxes)
+
+    grids: list[RectangularGrid] = []
+    for lattice, boxes in candidates:
+        col_pitch, row_pitch = _cell_pitch(lattice, boxes)
+        if (
+            abs(col_pitch - ref_col_pitch) > _PITCH_TOLERANCE * ref_col_pitch
+            or abs(row_pitch - ref_row_pitch) > _PITCH_TOLERANCE * ref_row_pitch
+        ):
+            continue
+        grids.append(_build_rectangular_grid(binary.shape, lattice, boxes))
+    if not grids:
+        raise GridDetectionError("No valid grid lattice found in image")
+    return grids
 
 
 def detect_grid(binary: np.ndarray, grid_index: int | None = None) -> RectangularGrid:

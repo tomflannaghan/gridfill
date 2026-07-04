@@ -75,3 +75,9 @@ def test_index_on_single_grid() -> None:
     grid = detect_grid(_load_binary("barred.png"), grid_index=1)
     assert grid.rows == 12
     assert grid.cols == 12
+
+
+def test_detect_grids_finds_single_column_grids() -> None:
+    """single_col_grids.png has a normal grid flanked by two 1-column grids."""
+    grids = detect_grids(_load_binary("single_col_grids.png"))
+    assert [(g.rows, g.cols) for g in grids] == [(10, 1), (10, 16), (10, 1)]
