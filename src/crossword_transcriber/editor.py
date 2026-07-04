@@ -343,9 +343,7 @@ class _GridEditor(tk.Tk):
             )
 
         _fit_display_fonts(self._grid_states, self._display_size, self._loader)
-        self._base_image_display = self._compute_base_image(
-            self._display_image, self._grid_states
-        )
+        self._base_image_display = self._compute_base_image(self._display_image, self._grid_states)
         self._render_and_display()
 
     def _on_canvas_resize(self, event: tk.Event[tk.Canvas]) -> None:
@@ -574,7 +572,7 @@ class _GridEditor(tk.Tk):
         if not for_save and self._active_grid_index is not None and len(self._grid_states) > 1:
             gs = self._grid_states[self._active_grid_index]
             hull_px = polygon_to_pixels(gs.grid.bounding_polygon(), image_size).astype(np.int32)
-            cv2.polylines(result, [hull_px], True, _ACTIVE_GRID_BGR, 3)
+            cv2.polylines(result, [hull_px], True, _ACTIVE_GRID_BGR, 2)
 
         # Cell selection highlight
         if not for_save and self._selected is not None and self._active_grid_index is not None:
@@ -582,7 +580,7 @@ class _GridEditor(tk.Tk):
             r, c = self._selected
             cell = gs.grid.cell(r, c)
             poly_px = polygon_to_pixels(cell.polygon, image_size).astype(np.int32)
-            thickness = 5 if self._multi_entry else 3
+            thickness = 3 if self._multi_entry else 2
             cv2.polylines(result, [poly_px], True, _SELECTION_BGR, thickness)
 
         # Text annotations -- stored in full-source pixel coordinates, so
@@ -740,35 +738,39 @@ class _GridEditor(tk.Tk):
             self._render_and_display()
 
     def _advance_selection(self) -> None:
+        """Move to the next non-block cell in reading order, without wrapping
+        back to the grid's start once the last cell is passed."""
         gs = self._active
         if gs is None or self._selected is None:
             return
         r, c = self._selected
         rows, cols = gs.grid.rows, gs.grid.cols
-        for _ in range(rows * cols):
+        while True:
             c += 1
             if c >= cols:
                 c = 0
                 r += 1
             if r >= rows:
-                r = 0
+                return
             if gs.grid.cell(r, c).kind is not CellKind.BLOCK:
                 self._selected = (r, c)
                 return
 
     def _retreat_selection(self) -> None:
+        """Move to the previous non-block cell in reading order, without wrapping
+        back to the grid's end once the first cell is passed."""
         gs = self._active
         if gs is None or self._selected is None:
             return
         r, c = self._selected
-        rows, cols = gs.grid.rows, gs.grid.cols
-        for _ in range(rows * cols):
+        cols = gs.grid.cols
+        while True:
             c -= 1
             if c < 0:
                 c = cols - 1
                 r -= 1
             if r < 0:
-                r = rows - 1
+                return
             if gs.grid.cell(r, c).kind is not CellKind.BLOCK:
                 self._selected = (r, c)
                 return
