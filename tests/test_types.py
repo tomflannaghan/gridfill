@@ -5,7 +5,14 @@ from __future__ import annotations
 import pytest
 
 import crossword_transcriber as ct
-from crossword_transcriber.types import BoundingBox, Cell, CellKind, Grid, RectangularGrid
+from crossword_transcriber.types import (
+    BoundingBox,
+    Cell,
+    CellKind,
+    Grid,
+    RectangularGrid,
+    grid_from_dict,
+)
 
 
 def test_public_api_exports() -> None:
@@ -63,3 +70,35 @@ def test_rectangular_grid_bounding_polygon() -> None:
     ]
     grid = RectangularGrid(rows=2, cols=2, cells=cells)
     assert grid.bounding_polygon() == [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+
+
+def test_cell_round_trips_through_dict() -> None:
+    cell = Cell(
+        polygon=[(0.0, 0.0), (0.5, 0.0), (0.5, 0.5), (0.0, 0.5)],
+        kind=CellKind.LETTER,
+        letter="A",
+        background=(10, 20, 30),
+    )
+    assert Cell.from_dict(cell.to_dict()) == cell
+
+
+def test_cell_round_trips_with_no_background() -> None:
+    cell = Cell(kind=CellKind.BLOCK)
+    assert Cell.from_dict(cell.to_dict()) == cell
+
+
+def test_rectangular_grid_round_trips_through_dict() -> None:
+    cells = [_cell(CellKind.LETTER, letter) for letter in "ABCDEF"]
+    grid = RectangularGrid(rows=2, cols=3, cells=cells)
+
+    data = grid.to_dict()
+    assert data["type"] == "rectangular"
+
+    loaded = grid_from_dict(data)
+    assert isinstance(loaded, RectangularGrid)
+    assert loaded == grid
+
+
+def test_grid_from_dict_unknown_type_raises() -> None:
+    with pytest.raises(ValueError, match="nonsense"):
+        grid_from_dict({"type": "nonsense"})

@@ -11,8 +11,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_edit = sub.add_parser("edit", help="Interactively edit a grid overlaid on its image.")
-    p_edit.add_argument("image", help="Path to the grid image.")
-    p_edit.add_argument("-o", "--out", help="Default output path for saving the rendered image.")
+    p_edit.add_argument(
+        "path",
+        help="Path to the grid image, or a .cwd document saved by a previous session.",
+    )
+    p_edit.add_argument("-o", "--out", help="Default output path for exporting the rendered image.")
     p_edit.add_argument("--font", help="Path to a TrueType font file.")
 
     args = parser.parse_args(argv)
@@ -21,7 +24,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         from .editor import edit_grid
 
         edit_grid(
-            args.image,
+            args.path,
             out_path=args.out,
             font_path=args.font,
         )

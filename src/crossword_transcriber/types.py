@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, TypeVar
 
 Point = tuple[float, float]
 
@@ -57,6 +59,24 @@ class Cell:
     letter: str | None = None
     background: tuple[int, int, int] | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "polygon": [list(p) for p in self.polygon],
+            "kind": self.kind.value,
+            "letter": self.letter,
+            "background": list(self.background) if self.background is not None else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Cell:
+        bg = data["background"]
+        return cls(
+            polygon=[(float(x), float(y)) for x, y in data["polygon"]],
+            kind=CellKind(data["kind"]),
+            letter=data["letter"],
+            background=(int(bg[0]), int(bg[1]), int(bg[2])) if bg is not None else None,
+        )
+
 
 class Grid(ABC):
     """Abstract base for any detected grid: an ordered list of cells.
@@ -74,7 +94,44 @@ class Grid(ABC):
         """The grid's own outer boundary, in the same normalized coordinate
         space as :attr:`Cell.polygon`."""
 
+    @abstractmethod
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict, including a ``"type"`` key
+        identifying the concrete subclass (see :func:`register_grid_type` and
+        :func:`grid_from_dict`)."""
 
+    @classmethod
+    @abstractmethod
+    def from_dict(cls, data: dict[str, Any]) -> Grid:
+        """Deserialize a dict produced by :meth:`to_dict`."""
+
+
+_GRID_TYPES: dict[str, type[Grid]] = {}
+
+_GridT = TypeVar("_GridT", bound=type[Grid])
+
+
+def register_grid_type(type_name: str) -> Callable[[_GridT], _GridT]:
+    """Class decorator registering a :class:`Grid` subclass under *type_name*
+    so :func:`grid_from_dict` can dispatch to it when loading a saved document."""
+
+    def decorator(grid_cls: _GridT) -> _GridT:
+        _GRID_TYPES[type_name] = grid_cls
+        return grid_cls
+
+    return decorator
+
+
+def grid_from_dict(data: dict[str, Any]) -> Grid:
+    """Deserialize a dict produced by any registered ``Grid.to_dict()``."""
+    type_name = data["type"]
+    grid_cls = _GRID_TYPES.get(type_name)
+    if grid_cls is None:
+        raise ValueError(f"Unknown grid type: {type_name!r}")
+    return grid_cls.from_dict(data)
+
+
+@register_grid_type("rectangular")
 @dataclass
 class RectangularGrid(Grid):
     """A grid laid out on a regular row/column lattice.
@@ -96,6 +153,22 @@ class RectangularGrid(Grid):
         bottom_right = self.cell(self.rows - 1, self.cols - 1).polygon[2]
         bottom_left = self.cell(self.rows - 1, 0).polygon[3]
         return [top_left, top_right, bottom_right, bottom_left]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "rectangular",
+            "rows": self.rows,
+            "cols": self.cols,
+            "cells": [cell.to_dict() for cell in self.cells],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RectangularGrid:
+        return cls(
+            rows=data["rows"],
+            cols=data["cols"],
+            cells=[Cell.from_dict(c) for c in data["cells"]],
+        )
 
     def to_letters(self) -> list[list[str | None]]:
         """Project to the public output format.

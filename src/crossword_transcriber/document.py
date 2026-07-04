@@ -1,0 +1,78 @@
+"""Save/load ``.cwd`` documents: the source image plus all grids, as JSON.
+
+The rendered image is never stored -- a document carries exactly the
+information needed to reconstruct it (the original image and the grid state),
+so it can be reopened and edited further.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+import os
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+
+import cv2
+import numpy as np
+
+from .errors import DocumentError
+from .types import Grid, grid_from_dict
+
+CWD_EXTENSION = ".cwd"
+
+_FORMAT_MAGIC = "crossword-transcriber"
+_FORMAT_VERSION = 1
+
+
+@dataclass
+class Document:
+    """The full editable state of a session: source image, grids, annotations."""
+
+    image: np.ndarray
+    grids: list[Grid]
+    annotations: list[tuple[float, float, str]] = field(default_factory=list)
+
+
+def save_document(
+    path: str | os.PathLike[str],
+    image: np.ndarray,
+    grids: Sequence[Grid],
+    annotations: Sequence[tuple[float, float, str]],
+) -> None:
+    """Write *image*, *grids*, and *annotations* to *path* as a ``.cwd`` document."""
+    ok, encoded = cv2.imencode(".png", image)
+    if not ok:
+        raise OSError("Could not encode image for saving")
+
+    payload = {
+        "format": _FORMAT_MAGIC,
+        "version": _FORMAT_VERSION,
+        "image": {
+            "encoding": "png",
+            "data": base64.b64encode(encoded.tobytes()).decode("ascii"),
+        },
+        "grids": [grid.to_dict() for grid in grids],
+        "annotations": [[x, y, text] for x, y, text in annotations],
+    }
+    with open(path, "w") as f:
+        json.dump(payload, f)
+
+
+def load_document(path: str | os.PathLike[str]) -> Document:
+    """Load a ``.cwd`` document previously written by :func:`save_document`."""
+    with open(path) as f:
+        payload = json.load(f)
+
+    if payload.get("format") != _FORMAT_MAGIC:
+        raise DocumentError(f"Not a crossword-transcriber document: {os.fspath(path)!r}")
+
+    image_bytes = base64.b64decode(payload["image"]["data"])
+    array = np.frombuffer(image_bytes, dtype=np.uint8)
+    image = cv2.imdecode(array, cv2.IMREAD_COLOR)
+    if image is None:
+        raise DocumentError(f"Could not decode embedded image in {os.fspath(path)!r}")
+
+    grids = [grid_from_dict(g) for g in payload["grids"]]
+    annotations = [(float(x), float(y), str(text)) for x, y, text in payload.get("annotations", [])]
+    return Document(image=np.asarray(image), grids=grids, annotations=annotations)

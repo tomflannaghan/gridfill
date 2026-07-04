@@ -23,3 +23,7 @@ class MultipleGridsError(GridDetectionError):
         super().__init__(
             f"Found {count} grids in image; specify grid_index (1-{count}) to select one"
         )
+
+
+class DocumentError(TranscriberError):
+    """Raised when a saved ``.cwd`` document is missing, malformed, or unreadable."""

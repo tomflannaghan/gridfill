@@ -9,12 +9,14 @@ import tkinter.filedialog
 import tkinter.simpledialog
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import cast
 
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 from .detection import detect_grids
+from .document import CWD_EXTENSION, load_document, save_document
 from .fonts import FontT, _best_grid, fit_font_size, fit_font_size_multi, font_loader
 from .geometry import (
     bounding_rect,
@@ -53,15 +55,36 @@ def edit_grid(
 ) -> list[RectangularGrid]:
     """Open an interactive editor for all grids found in *source*.
 
-    Each grid detected in the image gets its own editing state.  Click a cell
-    to select its grid.
+    *source* is either an image (a path or an already-loaded array) to detect
+    grids from, or the path to a ``.cwd`` document previously written by this
+    editor, which resumes editing with its saved grids and annotations.
 
-    Returns a list of edited :class:`RectangularGrid` objects (one per
-    detected grid).
+    Each grid gets its own editing state. Click a cell to select its grid.
+
+    Returns a list of edited :class:`RectangularGrid` objects (one per grid).
     """
-    image = load_image(source).copy()
-    binary = binarize(to_grayscale(image))
-    grids = detect_grids(binary)
+    save_path: str | os.PathLike[str] | None = None
+    annotations: list[tuple[float, float, str]] = []
+
+    if isinstance(source, np.ndarray):
+        image = source.copy()
+        binary = binarize(to_grayscale(image))
+        grids = detect_grids(binary)
+    elif os.fspath(source).endswith(CWD_EXTENSION):
+        document = load_document(source)
+        image = document.image
+        for grid in document.grids:
+            if not isinstance(grid, RectangularGrid):
+                raise NotImplementedError(
+                    f"Editor does not yet support grid type {type(grid).__name__!r}"
+                )
+        grids = cast(list[RectangularGrid], document.grids)
+        annotations = document.annotations
+        save_path = source
+    else:
+        image = load_image(source).copy()
+        binary = binarize(to_grayscale(image))
+        grids = detect_grids(binary)
 
     src_h, src_w = image.shape[:2]
     loader = font_loader(font_path)
@@ -80,6 +103,8 @@ def edit_grid(
         loader=loader,
         color=color,
         out_path=out_path,
+        save_path=save_path,
+        annotations=annotations,
     )
     editor.mainloop()
     return [gs.grid for gs in editor._grid_states]
@@ -112,6 +137,8 @@ class _GridEditor(tk.Tk):
         loader: Callable[[int], FontT],
         color: tuple[int, int, int],
         out_path: str | os.PathLike[str] | None,
+        save_path: str | os.PathLike[str] | None = None,
+        annotations: list[tuple[float, float, str]] | None = None,
     ) -> None:
         super().__init__()
         self.title("Crossword Grid Editor")
@@ -120,6 +147,7 @@ class _GridEditor(tk.Tk):
         self._color = color
         self._highlight_color = _DEFAULT_HIGHLIGHT_COLOR_BGR
         self._out_path = out_path
+        self._save_path = save_path
         self._image = image
         self._loader = loader
 
@@ -136,7 +164,7 @@ class _GridEditor(tk.Tk):
         self._active_grid_index: int | None = 0 if len(grid_states) == 1 else None
         self._selected: tuple[int, int] | None = None
         self._multi_entry = False
-        self._annotations: list[tuple[float, float, str]] = []
+        self._annotations: list[tuple[float, float, str]] = list(annotations or [])
 
         self._canvas = tk.Canvas(self, width=self._display_w, height=self._display_h)
         self._canvas.pack()
@@ -178,7 +206,12 @@ class _GridEditor(tk.Tk):
         menubar = tk.Menu(self)
 
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Save Image", accelerator="Ctrl+S", command=self._save_image)
+        file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self._save_document)
+        file_menu.add_command(
+            label="Export Image…",
+            accelerator="Ctrl+Shift+S",
+            command=self._save_image,
+        )
         file_menu.add_separator()
         file_menu.add_command(label="Close", accelerator="Return", command=self._on_close)
         menubar.add_cascade(label="File", menu=file_menu)
@@ -437,7 +470,10 @@ class _GridEditor(tk.Tk):
         shift = bool(state & 0x1)
 
         if ctrl and event.keysym.lower() == "s":
-            self._save_image()
+            if shift:
+                self._save_image()
+            else:
+                self._save_document()
             return
 
         if ctrl and event.keysym.lower() == "h":
@@ -600,6 +636,23 @@ class _GridEditor(tk.Tk):
         rendered = self._render(for_save=True)
         save_image(path, rendered)
         self._out_path = path
+        self.title(f"Crossword Grid Editor — exported {os.path.basename(str(path))}")
+
+    def _save_document(self) -> None:
+        path = self._save_path
+        if path is None:
+            path = tk.filedialog.asksaveasfilename(
+                defaultextension=CWD_EXTENSION,
+                filetypes=[
+                    ("Crossword document", f"*{CWD_EXTENSION}"),
+                    ("All files", "*.*"),
+                ],
+            )
+        if not path:
+            return
+        grids = [gs.grid for gs in self._grid_states]
+        save_document(path, self._image, grids, self._annotations)
+        self._save_path = path
         self.title(f"Crossword Grid Editor — saved {os.path.basename(str(path))}")
 
     def _on_close(self) -> None:
