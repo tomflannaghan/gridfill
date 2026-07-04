@@ -50,12 +50,23 @@ _OPEN_FILETYPES = [
 
 @dataclass
 class _GridState:
-    """Per-grid data needed by the editor."""
+    """Per-grid data needed by the editor.
+
+    Two font sets are kept: one fitted to the full source resolution (used
+    only when rendering for export/save) and one fitted to the downscaled
+    display resolution (used for the interactive view, which is redrawn on
+    every keystroke and must stay cheap).
+    """
 
     grid: RectangularGrid
     single_font: ImageFont.FreeTypeFont
     ref_cell_size: tuple[int, int]
+    display_single_font: ImageFont.FreeTypeFont
+    display_ref_cell_size: tuple[int, int]
     multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont] = field(default_factory=dict)
+    display_multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont] = field(
+        default_factory=dict
+    )
 
 
 _SavePath = str | os.PathLike[str] | None
@@ -99,21 +110,41 @@ def _load_source(
     return image, detect_grids(binary), None, []
 
 
+def _fit_font(
+    grid: RectangularGrid,
+    image_size: tuple[int, int],
+    loader: Callable[[int], FontT],
+) -> tuple[ImageFont.FreeTypeFont, tuple[int, int]]:
+    sample_px = polygon_to_pixels(grid.cell(0, 0).polygon, image_size)
+    ref_w, ref_h = quad_size(sample_px)
+    return loader(fit_font_size(loader, ref_w, ref_h)), (ref_w, ref_h)
+
+
 def _make_grid_states(
     grids: list[RectangularGrid],
-    image: np.ndarray,
+    src_size: tuple[int, int],
+    display_size: tuple[int, int],
     loader: Callable[[int], FontT],
 ) -> list[_GridState]:
-    src_h, src_w = image.shape[:2]
     grid_states: list[_GridState] = []
     for grid in grids:
-        sample_px = polygon_to_pixels(grid.cell(0, 0).polygon, (src_w, src_h))
-        ref_w, ref_h = quad_size(sample_px)
-        single_font = loader(fit_font_size(loader, ref_w, ref_h))
+        single_font, ref_cell_size = _fit_font(grid, src_size, loader)
+        display_single_font, display_ref_cell_size = _fit_font(grid, display_size, loader)
         grid_states.append(
-            _GridState(grid=grid, single_font=single_font, ref_cell_size=(ref_w, ref_h))
+            _GridState(
+                grid=grid,
+                single_font=single_font,
+                ref_cell_size=ref_cell_size,
+                display_single_font=display_single_font,
+                display_ref_cell_size=display_ref_cell_size,
+            )
         )
     return grid_states
+
+
+def _fit_display_size(src_w: int, src_h: int) -> tuple[int, int]:
+    scale = min(_MAX_DISPLAY_SIZE / src_w, _MAX_DISPLAY_SIZE / src_h, 1.0)
+    return max(1, int(src_w * scale)), max(1, int(src_h * scale))
 
 
 def edit_grid(
@@ -137,11 +168,10 @@ def edit_grid(
     """
     image, grids, save_path, annotations = _load_source(source)
     loader = font_loader(font_path)
-    grid_states = _make_grid_states(grids, image, loader)
 
     editor = _GridEditor(
         image=image,
-        grid_states=grid_states,
+        grids=grids,
         loader=loader,
         color=color,
         out_path=out_path,
@@ -175,7 +205,7 @@ class _GridEditor(tk.Tk):
     def __init__(
         self,
         image: np.ndarray,
-        grid_states: list[_GridState],
+        grids: list[RectangularGrid],
         loader: Callable[[int], FontT],
         color: tuple[int, int, int],
         out_path: str | os.PathLike[str] | None,
@@ -201,7 +231,7 @@ class _GridEditor(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._build_menu()
-        self._load_state(image, grid_states, save_path, annotations)
+        self._load_state(image, grids, save_path, annotations)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -210,7 +240,7 @@ class _GridEditor(tk.Tk):
     def _load_state(
         self,
         image: np.ndarray,
-        grid_states: list[_GridState],
+        grids: list[RectangularGrid],
         save_path: str | os.PathLike[str] | None,
         annotations: list[tuple[float, float, str]] | None,
     ) -> None:
@@ -218,22 +248,40 @@ class _GridEditor(tk.Tk):
 
         Used both for the initial load and for File > Open, which replaces
         the current session entirely.
+
+        The interactive view is rendered against a copy of *image* downscaled
+        to the display size -- this keeps per-keystroke rendering cheap even
+        for large scans/PDF pages. Export and ``.cwd`` saves always work from
+        the untouched full-resolution *image*.
         """
         self._image = image
-        self._grid_states = grid_states
         self._save_path = save_path
 
         src_h, src_w = image.shape[:2]
         self._src_size = (src_w, src_h)
-        self._base_image = self._compute_base_image(image, grid_states)
 
-        scale = min(_MAX_DISPLAY_SIZE / src_w, _MAX_DISPLAY_SIZE / src_h, 1.0)
-        self._display_w = int(src_w * scale)
-        self._display_h = int(src_h * scale)
-        self._scale = scale
-        self._canvas.config(width=self._display_w, height=self._display_h)
+        display_w, display_h = _fit_display_size(src_w, src_h)
+        self._display_w = display_w
+        self._display_h = display_h
+        self._display_size = (display_w, display_h)
+        self._scale = display_w / src_w
+        self._canvas.config(width=display_w, height=display_h)
 
-        self._active_grid_index: int | None = 0 if len(grid_states) == 1 else None
+        if (display_w, display_h) == (src_w, src_h):
+            self._display_image = image
+        else:
+            self._display_image = cv2.resize(
+                image, (display_w, display_h), interpolation=cv2.INTER_AREA
+            )
+
+        self._grid_states = _make_grid_states(
+            grids, self._src_size, self._display_size, self._loader
+        )
+        self._base_image_display = self._compute_base_image(
+            self._display_image, self._grid_states
+        )
+
+        self._active_grid_index: int | None = 0 if len(grids) == 1 else None
         self._selected: tuple[int, int] | None = None
         self._multi_entry = False
         self._annotations: list[tuple[float, float, str]] = list(annotations or [])
@@ -361,22 +409,34 @@ class _GridEditor(tk.Tk):
         return np.asarray(np.clip(result, 0, 255).round().astype(np.uint8))
 
     def _recompute_base(self) -> None:
-        self._base_image = self._compute_base_image(self._image, self._grid_states)
+        """Refresh the display-resolution base image.
+
+        The full-resolution base is recomputed on demand at export time
+        (see :meth:`_render`), so there is nothing to refresh here for it.
+        """
+        self._base_image_display = self._compute_base_image(self._display_image, self._grid_states)
 
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
 
-    def _draw_letter_in_cell(self, result: np.ndarray, gs: _GridState, cell: Cell) -> None:
+    def _draw_letter_in_cell(
+        self,
+        result: np.ndarray,
+        cell: Cell,
+        image_size: tuple[int, int],
+        single_font: ImageFont.FreeTypeFont,
+        ref_cell_size: tuple[int, int],
+        multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont],
+    ) -> None:
         text = (cell.letter or "").upper()
         if not text:
             return
-        src_w, src_h = self._src_size
-        polygon_px = polygon_to_pixels(cell.polygon, (src_w, src_h))
+        polygon_px = polygon_to_pixels(cell.polygon, image_size)
         cell_w, cell_h = quad_size(polygon_px)
         cx, cy = polygon_px.mean(axis=0)
 
-        x0, y0, x1, y1 = bounding_rect(polygon_px, (src_w, src_h), margin=1)
+        x0, y0, x1, y1 = bounding_rect(polygon_px, image_size, margin=1)
         if x1 <= x0 or y1 <= y0:
             return
         local_cx, local_cy = cx - x0, cy - y0
@@ -390,17 +450,17 @@ class _GridEditor(tk.Tk):
             draw.text(
                 (local_cx, local_cy),
                 text,
-                font=gs.single_font,
+                font=single_font,
                 fill=rgb_color,
                 anchor="mm",
             )
         else:
-            ref_w, ref_h = gs.ref_cell_size
+            ref_w, ref_h = ref_cell_size
             grid_shape = _best_grid(len(text), ref_w, ref_h)
-            if grid_shape not in gs.multi_font_cache:
+            if grid_shape not in multi_font_cache:
                 size = fit_font_size_multi(self._loader, ref_w, ref_h, grid_shape[0], grid_shape[1])
-                gs.multi_font_cache[grid_shape] = self._loader(size)
-            font = gs.multi_font_cache[grid_shape]
+                multi_font_cache[grid_shape] = self._loader(size)
+            font = multi_font_cache[grid_shape]
             nrows, ncols = grid_shape
             slot_w, slot_h = cell_w / ncols, cell_h / nrows
             top_left_x, top_left_y = local_cx - cell_w / 2, local_cy - cell_h / 2
@@ -417,17 +477,30 @@ class _GridEditor(tk.Tk):
         result[y0:y1, x0:x1] = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
     def _render(self, *, for_save: bool = False) -> np.ndarray:
-        result = self._base_image.copy()
+        if for_save:
+            base = self._compute_base_image(self._image, self._grid_states)
+            image_size = self._src_size
+        else:
+            base = self._base_image_display
+            image_size = self._display_size
+        result = base.copy()
 
         for gs in self._grid_states:
+            single_font, ref_cell_size, multi_font_cache = (
+                (gs.single_font, gs.ref_cell_size, gs.multi_font_cache)
+                if for_save
+                else (gs.display_single_font, gs.display_ref_cell_size, gs.display_multi_font_cache)
+            )
             for cell in gs.grid.cells:
                 if cell.kind is CellKind.LETTER and cell.letter:
-                    self._draw_letter_in_cell(result, gs, cell)
+                    self._draw_letter_in_cell(
+                        result, cell, image_size, single_font, ref_cell_size, multi_font_cache
+                    )
 
         # Active grid indicator
         if not for_save and self._active_grid_index is not None and len(self._grid_states) > 1:
             gs = self._grid_states[self._active_grid_index]
-            hull_px = polygon_to_pixels(gs.grid.bounding_polygon(), self._src_size).astype(np.int32)
+            hull_px = polygon_to_pixels(gs.grid.bounding_polygon(), image_size).astype(np.int32)
             cv2.polylines(result, [hull_px], True, _ACTIVE_GRID_BGR, 3)
 
         # Cell selection highlight
@@ -435,22 +508,25 @@ class _GridEditor(tk.Tk):
             gs = self._grid_states[self._active_grid_index]
             r, c = self._selected
             cell = gs.grid.cell(r, c)
-            poly_px = polygon_to_pixels(cell.polygon, self._src_size).astype(np.int32)
+            poly_px = polygon_to_pixels(cell.polygon, image_size).astype(np.int32)
             thickness = 5 if self._multi_entry else 3
             cv2.polylines(result, [poly_px], True, _SELECTION_BGR, thickness)
 
-        # Text annotations
+        # Text annotations -- stored in full-source pixel coordinates, so
+        # scale them down to display space when not rendering for export.
         if self._annotations:
             gs = self._active or self._grid_states[0]
+            font = gs.single_font if for_save else gs.display_single_font
+            coord_scale = 1.0 if for_save else self._scale
             pil_img = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
             draw = ImageDraw.Draw(pil_img)
             b, g, r = self._color
             rgb_color = (r, g, b)
             for ax, ay, text in self._annotations:
                 draw.text(
-                    (ax, ay),
+                    (ax * coord_scale, ay * coord_scale),
                     text,
-                    font=gs.single_font,
+                    font=font,
                     fill=rgb_color,
                     anchor="ls",
                 )
@@ -462,11 +538,6 @@ class _GridEditor(tk.Tk):
         rendered = self._render()
         rgb = cv2.cvtColor(rendered, cv2.COLOR_BGR2RGB)
         pil_img = Image.fromarray(rgb)
-        if (self._display_w, self._display_h) != (
-            pil_img.width,
-            pil_img.height,
-        ):
-            pil_img = pil_img.resize((self._display_w, self._display_h), Image.Resampling.LANCZOS)
         self._photo = ImageTk.PhotoImage(pil_img)
         self._canvas.itemconfig(self._canvas_image, image=self._photo)
 
@@ -685,8 +756,7 @@ class _GridEditor(tk.Tk):
         if not path:
             return
         image, grids, save_path, annotations = _load_source(path)
-        grid_states = _make_grid_states(grids, image, self._loader)
-        self._load_state(image, grid_states, save_path, annotations)
+        self._load_state(image, grids, save_path, annotations)
         self.title(f"Crossword Grid Editor — opened {os.path.basename(path)}")
 
     def _save_image(self) -> None:
