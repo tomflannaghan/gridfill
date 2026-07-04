@@ -81,3 +81,19 @@ def test_detect_grids_finds_single_column_grids() -> None:
     """single_col_grids.png has a normal grid flanked by two 1-column grids."""
     grids = detect_grids(_load_binary("single_col_grids.png"))
     assert [(g.rows, g.cols) for g in grids] == [(10, 1), (10, 16), (10, 1)]
+
+
+def test_detect_grids_finds_single_column_grids_on_a_wide_page() -> None:
+    """The coarse line-extraction kernel scales with the *whole* page's width, not
+    a grid's own cell pitch, so a single-column grid's border strokes (only one
+    cell pitch long) can fall short of it on a large page even though they clear
+    it comfortably on this small fixture -- this is what full-resolution scans
+    like a scanned A4 page hit. Pad the fixture with whitespace to reproduce a
+    large-page width without changing any grid's cell pitch, and confirm the
+    finer, pitch-derived second pass still recovers both single-column grids.
+    """
+    image = cv2.imread(str(FIXTURES / "single_col_grids.png"))
+    assert image is not None
+    padded = cv2.copyMakeBorder(image, 0, 0, 700, 700, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+    grids = detect_grids(binarize(to_grayscale(padded)))
+    assert [(g.rows, g.cols) for g in grids] == [(10, 1), (10, 16), (10, 1)]

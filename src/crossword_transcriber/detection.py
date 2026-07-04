@@ -33,15 +33,24 @@ class _RectifiedLattice:
     size: tuple[int, int]
 
 
-def extract_line_mask(binary: np.ndarray) -> np.ndarray:
+def extract_line_mask(
+    binary: np.ndarray, h_size: int | None = None, v_size: int | None = None
+) -> np.ndarray:
     """Isolate the long horizontal and vertical strokes (grid lines).
 
     Morphological opening with long 1-D kernels keeps only runs longer than the
     kernel, which removes letters and clue numbers while preserving grid lines.
+    *h_size*/*v_size* default to a fraction of the image's own width/height, which
+    is right for a page's main grid(s) but too large for a single-row/column
+    auxiliary grid, whose border strokes span only one cell -- see
+    :func:`detect_grids`, which re-extracts with smaller, pitch-derived sizes to
+    recover those.
     """
     height, width = binary.shape[:2]
-    h_size = max(10, width // 20)
-    v_size = max(10, height // 20)
+    if h_size is None:
+        h_size = max(10, width // 20)
+    if v_size is None:
+        v_size = max(10, height // 20)
     h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (h_size, 1))
     v_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, v_size))
     horizontal = cv2.morphologyEx(binary, cv2.MORPH_OPEN, h_kernel)
@@ -199,6 +208,15 @@ def _cell_pitch(lattice: _RectifiedLattice, boxes: list[list[BoundingBox]]) -> t
 
 
 _PITCH_TOLERANCE = 0.20
+_FINE_KERNEL_RATIO = 0.6
+
+
+def _resolve_candidates(
+    line_mask: np.ndarray,
+) -> list[tuple[_RectifiedLattice, list[list[BoundingBox]]]]:
+    return [
+        result for quad in _find_grid_quads(line_mask) if (result := _segment_quad(line_mask, quad))
+    ]
 
 
 def detect_grids(binary: np.ndarray) -> list[RectangularGrid]:
@@ -212,15 +230,24 @@ def detect_grids(binary: np.ndarray) -> list[RectangularGrid]:
     single-row/single-column ones) share the same cell pitch as the main
     grid, so a mismatch is a strong signal it isn't actually a grid.
     """
-    line_mask = extract_line_mask(binary)
-    candidates = [
-        result for quad in _find_grid_quads(line_mask) if (result := _segment_quad(line_mask, quad))
-    ]
+    coarse_mask = extract_line_mask(binary)
+    candidates = _resolve_candidates(coarse_mask)
     if not candidates:
         raise GridDetectionError("No valid grid lattice found in image")
 
     reference_lattice, reference_boxes = max(candidates, key=lambda c: len(c[1]) * len(c[1][0]))
     ref_col_pitch, ref_row_pitch = _cell_pitch(reference_lattice, reference_boxes)
+
+    # The coarse mask's kernel is sized off the whole image, so it erases the
+    # border strokes of a single-row/column grid (only one cell pitch long) even
+    # though it correctly preserves the main grid's much longer borders. Re-extract
+    # with a kernel sized off the now-known reference pitch to recover those, and
+    # fold the result into the coarse mask so nothing found there is lost.
+    fine_h = max(10, int(ref_col_pitch * _FINE_KERNEL_RATIO))
+    fine_v = max(10, int(ref_row_pitch * _FINE_KERNEL_RATIO))
+    fine_mask = extract_line_mask(binary, h_size=fine_h, v_size=fine_v)
+    merged_mask = np.asarray(cv2.bitwise_or(coarse_mask, fine_mask))
+    candidates = _resolve_candidates(merged_mask)
 
     grids: list[RectangularGrid] = []
     for lattice, boxes in candidates:
