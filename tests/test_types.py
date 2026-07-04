@@ -7,8 +7,7 @@ from crossword_transcriber.types import BoundingBox, Cell, CellKind, Grid
 
 
 def test_public_api_exports() -> None:
-    assert hasattr(ct, "read_grid")
-    assert hasattr(ct, "write_grid")
+    assert hasattr(ct, "edit_grid")
     assert ct.__version__
 
 

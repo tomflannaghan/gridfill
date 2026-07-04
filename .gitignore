@@ -15,13 +15,6 @@ venv/
 .mypy_cache/
 .ruff_cache/
 
-# Trained model weights (large; distribute separately)
-models/*.pt
-models/*.pth
-models/*.onnx
-
 # OS / editor
 .DS_Store
 *.swp
-
-data

@@ -1,4 +1,4 @@
-"""Font loading and cell-fitting helpers for the write pipeline."""
+"""Font loading and cell-fitting helpers for rendering letters into grid cells."""
 
 from __future__ import annotations
 

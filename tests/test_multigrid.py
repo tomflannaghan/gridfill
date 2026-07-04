@@ -10,7 +10,6 @@ import pytest
 from crossword_transcriber.detection import detect_grid, detect_grids
 from crossword_transcriber.errors import GridDetectionError, MultipleGridsError
 from crossword_transcriber.preprocess import binarize, to_grayscale
-from crossword_transcriber.reader import read_grid
 from crossword_transcriber.segmentation import infer_cell_boxes
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -81,9 +80,3 @@ def test_index_on_single_grid() -> None:
     boxes = infer_cell_boxes(detected.line_mask)
     assert len(boxes) == 12
     assert len(boxes[0]) == 12
-
-
-def test_read_grid_with_index() -> None:
-    grid = read_grid(str(FIXTURES / "multigrid.png"), grid_index=1)
-    assert grid.rows == 12
-    assert grid.cols == 12

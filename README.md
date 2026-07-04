@@ -1,37 +1,38 @@
 # crossword-transcriber
 
-Read handwritten crossword grids from images into a 2D array of letters, and write
-a letter array back into an empty grid image.
-
-> Status: **early scaffold.** Core types and the package skeleton are in place; the
-> pipeline stages are stubbed. See [PLAN.md](PLAN.md) for the design and roadmap.
+Detect a handwritten crossword grid's layout from a scanned image and edit it
+interactively: click a cell, type letters, highlight cells, drop free-text
+annotations, then save the result as an image or CSV.
 
 ## Install (development)
 
 ```bash
 uv venv
 uv pip install -e ".[dev]"
-# For the handwriting-recognition backend (Phase 4):
-uv pip install -e ".[dev,recognize]"
 ```
 
-## Usage (target API)
+## Usage
+
+```bash
+crossword-transcriber edit scan.png -o filled_out.png
+```
 
 ```python
-from crossword_transcriber import read_grid, write_grid
+from crossword_transcriber import edit_grid
 
-# Read: scan -> list[list[str | None]]
-#   None = block cell, "" = empty white cell, "A".."Z" = recognised letter
-grid = read_grid("filled.png")
-
-# Write: empty grid + letters -> filled image
-write_grid("empty.png", grid, out_path="filled_out.png")
+# Opens an interactive editor window for every grid found in the image.
+# Returns the edited Grid objects when the window is closed.
+grids = edit_grid("scan.png", out_path="filled_out.png")
 ```
+
+In the editor: click a cell to select it and type a letter; double-click for
+multi-letter cells (barred grids). `Ctrl+S` saves the rendered image, `Ctrl+Shift+S`
+saves the active grid as CSV. See the menu bar for highlighting and free-text
+annotation tools.
 
 ## Scope (v1)
 
-Clean scans; square uniform grids (blocked **and** barred); single uppercase A-Z
-letters; fully offline. See [PLAN.md](PLAN.md) for details.
+Clean scans; square uniform grids (blocked **and** barred); fully offline.
 
 ## Development
 

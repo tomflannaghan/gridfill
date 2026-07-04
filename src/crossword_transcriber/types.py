@@ -1,4 +1,4 @@
-"""Core data types shared across the read and write pipelines."""
+"""Core data types shared across grid detection and the editor."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ class Grid:
     """A detected and segmented crossword grid.
 
     Holds the per-cell results plus the perspective transform used to rectify the
-    source image, so the same geometry can be reused by the write pipeline.
+    source image, so the same geometry can be reused when rendering back onto it.
     """
 
     rows: int
@@ -215,5 +215,5 @@ def _split_csv_sections(text: str) -> list[str]:
     return sections
 
 
-# Public alias for the read/write array format.
+# Public alias for the simple letter-array format (see Grid.to_letters).
 LetterGrid = list[list[str | None]]

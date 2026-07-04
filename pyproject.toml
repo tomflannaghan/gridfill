@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "crossword-transcriber"
 version = "0.1.0"
-description = "Read handwritten crossword grids from images and write letter arrays back into empty grids."
+description = "Detect handwritten crossword grids in images and edit them interactively."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -17,12 +17,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Training deps for scripts/train_emnist.py (torch + ONNX export).
-train = [
-    "torch>=2.2",
-    "torchvision>=0.17",
-    "onnx>=1.15",
-]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
