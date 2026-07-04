@@ -18,7 +18,6 @@ from .detection import detect_grids
 from .fonts import FontT, _best_grid, fit_font_size, fit_font_size_multi, font_loader
 from .geometry import (
     bounding_rect,
-    canvas_to_quad_homography,
     inset_quad,
     point_in_polygon,
     polygon_to_pixels,
@@ -34,7 +33,6 @@ _ACTIVE_GRID_BGR = (0, 180, 0)
 _WHITE_DISTANCE_THRESHOLD = 30
 _MAX_DISPLAY_SIZE = 900
 _CELL_FILL_INSET_FRAC = 0.06
-_CELL_RASTER_MIN = 24
 
 
 @dataclass
@@ -284,18 +282,25 @@ class _GridEditor(tk.Tk):
             return
         src_w, src_h = self._src_size
         polygon_px = polygon_to_pixels(cell.polygon, (src_w, src_h))
-        canvas_w, canvas_h = quad_size(polygon_px)
-        canvas_w = max(canvas_w, _CELL_RASTER_MIN)
-        canvas_h = max(canvas_h, _CELL_RASTER_MIN)
+        cell_w, cell_h = quad_size(polygon_px)
+        cx, cy = polygon_px.mean(axis=0)
 
-        canvas = Image.new("L", (canvas_w, canvas_h), 0)
-        draw = ImageDraw.Draw(canvas)
+        x0, y0, x1, y1 = bounding_rect(polygon_px, (src_w, src_h), margin=1)
+        if x1 <= x0 or y1 <= y0:
+            return
+        local_cx, local_cy = cx - x0, cy - y0
+
+        pil_img = Image.fromarray(cv2.cvtColor(result[y0:y1, x0:x1], cv2.COLOR_BGR2RGB))
+        draw = ImageDraw.Draw(pil_img)
+        b, g, r = self._color
+        rgb_color = (r, g, b)
+
         if len(text) == 1:
             draw.text(
-                (canvas_w / 2, canvas_h / 2),
+                (local_cx, local_cy),
                 text,
                 font=gs.single_font,
-                fill=255,
+                fill=rgb_color,
                 anchor="mm",
             )
         else:
@@ -306,26 +311,19 @@ class _GridEditor(tk.Tk):
                 gs.multi_font_cache[grid_shape] = self._loader(size)
             font = gs.multi_font_cache[grid_shape]
             nrows, ncols = grid_shape
-            slot_w, slot_h = canvas_w / ncols, canvas_h / nrows
+            slot_w, slot_h = cell_w / ncols, cell_h / nrows
+            top_left_x, top_left_y = local_cx - cell_w / 2, local_cy - cell_h / 2
             for i, ch in enumerate(text):
                 ri, ci = divmod(i, ncols)
                 draw.text(
-                    ((ci + 0.5) * slot_w, (ri + 0.5) * slot_h),
+                    (top_left_x + (ci + 0.5) * slot_w, top_left_y + (ri + 0.5) * slot_h),
                     ch,
                     font=font,
-                    fill=255,
+                    fill=rgb_color,
                     anchor="mm",
                 )
 
-        x0, y0, x1, y1 = bounding_rect(polygon_px, (src_w, src_h), margin=1)
-        if x1 <= x0 or y1 <= y0:
-            return
-        homography = canvas_to_quad_homography((canvas_w, canvas_h), polygon_px - [x0, y0])
-        warped_alpha = cv2.warpPerspective(np.array(canvas), homography, (x1 - x0, y1 - y0))
-        alpha = (warped_alpha.astype(np.float32) / 255.0)[:, :, None]
-        fill = np.array(self._color, dtype=np.float32).reshape(1, 1, 3)
-        roi = result[y0:y1, x0:x1].astype(np.float32)
-        result[y0:y1, x0:x1] = np.clip(roi * (1 - alpha) + fill * alpha, 0, 255).round()
+        result[y0:y1, x0:x1] = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
     def _render(self, *, for_save: bool = False) -> np.ndarray:
         result = self._base_image.copy()

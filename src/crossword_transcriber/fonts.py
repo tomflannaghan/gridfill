@@ -50,7 +50,7 @@ def fit_font_size(
     loader: Callable[[int], FontT],
     cell_width: int,
     cell_height: int,
-    height_ratio: float = 0.6,
+    height_ratio: float = 0.5,
     max_width_ratio: float = 0.85,
 ) -> int:
     """Pick a font size so an uppercase glyph fills the cell with margin.

@@ -45,17 +45,3 @@ def bounding_rect(
     x1 = min(int(np.ceil(polygon_px[:, 0].max())) + margin, w)
     y1 = min(int(np.ceil(polygon_px[:, 1].max())) + margin, h)
     return x0, y0, x1, y1
-
-
-def canvas_to_quad_homography(canvas_size: tuple[int, int], polygon_px: np.ndarray) -> np.ndarray:
-    """Homography mapping a (canvas_w, canvas_h) raster's own corners onto *polygon_px*.
-
-    ``polygon_px`` corners are in TL/TR/BR/BL order, matching the raster's own
-    corners in the same order.
-    """
-    canvas_w, canvas_h = canvas_size
-    canvas_corners = np.array(
-        [[0, 0], [canvas_w, 0], [canvas_w, canvas_h], [0, canvas_h]], dtype=np.float32
-    )
-    dst = np.asarray(polygon_px, dtype=np.float32)
-    return np.asarray(cv2.getPerspectiveTransform(canvas_corners, dst))
