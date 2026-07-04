@@ -780,7 +780,7 @@ class _GridEditor(tk.Tk):
     # ------------------------------------------------------------------
 
     def _add_annotation(self, display_x: float, display_y: float) -> None:
-        text = tk.simpledialog.askstring("Add Text", "Enter text:", parent=self)
+        text = tkinter.simpledialog.askstring("Add Text", "Enter text:", parent=self)
         if not text:
             return
         src_x = display_x / self._scale
@@ -813,7 +813,7 @@ class _GridEditor(tk.Tk):
 
     def _pick_highlight_color(self) -> None:
         b, g, r = self._highlight_color
-        result = tk.colorchooser.askcolor(
+        result = tkinter.colorchooser.askcolor(
             color=f"#{r:02x}{g:02x}{b:02x}",
             title="Pick highlight colour",
         )
@@ -827,7 +827,7 @@ class _GridEditor(tk.Tk):
     # ------------------------------------------------------------------
 
     def _open_file(self) -> None:
-        path = tk.filedialog.askopenfilename(filetypes=_OPEN_FILETYPES)
+        path = tkinter.filedialog.askopenfilename(filetypes=_OPEN_FILETYPES)
         if not path:
             return
         image, grids, save_path, annotations = _load_source(path)
@@ -837,7 +837,7 @@ class _GridEditor(tk.Tk):
     def _save_image(self) -> None:
         path = self._out_path
         if path is None:
-            path = tk.filedialog.asksaveasfilename(
+            path = tkinter.filedialog.asksaveasfilename(
                 defaultextension=".png",
                 filetypes=[
                     ("PNG", "*.png"),
@@ -855,7 +855,7 @@ class _GridEditor(tk.Tk):
     def _save_document(self) -> None:
         path = self._save_path
         if path is None:
-            path = tk.filedialog.asksaveasfilename(
+            path = tkinter.filedialog.asksaveasfilename(
                 defaultextension=CWD_EXTENSION,
                 filetypes=[
                     ("Crossword document", f"*{CWD_EXTENSION}"),
