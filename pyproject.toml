@@ -12,7 +12,7 @@ license = { text = "MIT" }
 authors = [{ name = "Tom Flannaghan", email = "tomflannaghan@gmail.com" }]
 dependencies = [
     "numpy>=1.26",
-    "opencv-python>=4.9",
+    "opencv-python-headless>=4.9",
     "pillow>=10.2",
     "pypdfium2>=4.30",
 ]
