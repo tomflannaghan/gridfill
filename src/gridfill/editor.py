@@ -251,7 +251,7 @@ class _GridEditor(tk.Tk):
         annotations: list[tuple[float, float, str]] | None = None,
     ) -> None:
         super().__init__()
-        self.title("Inkwell")
+        self.title("Gridfill")
 
         self._color = color
         self._highlight_color = _DEFAULT_HIGHLIGHT_COLOR_BGR
@@ -845,7 +845,7 @@ class _GridEditor(tk.Tk):
             return
         image, grids, save_path, annotations = _load_source(path)
         self._load_state(image, grids, save_path, path, annotations)
-        self.title(f"Inkwell — opened {os.path.basename(path)}")
+        self.title(f"Gridfill — opened {os.path.basename(path)}")
 
     def _save_image(self) -> None:
         path = self._out_path
@@ -864,7 +864,7 @@ class _GridEditor(tk.Tk):
         rendered = self._render(for_save=True)
         save_image(path, rendered)
         self._out_path = path
-        self.title(f"Inkwell — exported {os.path.basename(str(path))}")
+        self.title(f"Gridfill — exported {os.path.basename(str(path))}")
 
     def _save_document(self) -> None:
         path = self._save_path
@@ -882,7 +882,7 @@ class _GridEditor(tk.Tk):
         grids = [gs.grid for gs in self._grid_states]
         save_document(path, self._image, grids, self._annotations)
         self._save_path = path
-        self.title(f"Inkwell — saved {os.path.basename(str(path))}")
+        self.title(f"Gridfill — saved {os.path.basename(str(path))}")
 
     def _on_close(self) -> None:
         self.destroy()

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from inkwell.io import load_image
+from gridfill.io import load_image
 
 Image.init()  # eagerly register plugins; PdfImagePlugin needs JPEG's registered lazily otherwise
 

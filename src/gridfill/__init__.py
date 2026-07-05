@@ -2,7 +2,7 @@
 
 Public API:
 
-    from inkwell import edit_grid
+    from gridfill import edit_grid
 """
 
 from __future__ import annotations

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-import inkwell as ct
-from inkwell.types import (
+import gridfill
+from gridfill.types import (
     BoundingBox,
     Cell,
     CellKind,
@@ -16,8 +16,8 @@ from inkwell.types import (
 
 
 def test_public_api_exports() -> None:
-    assert hasattr(ct, "edit_grid")
-    assert ct.__version__
+    assert hasattr(gridfill, "edit_grid")
+    assert gridfill.__version__
 
 
 def test_bounding_box_corners() -> None:

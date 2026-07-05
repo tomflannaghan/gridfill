@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "inkwell"
+name = "gridfill"
 version = "0.1.0"
-description = "Detect handwritten crossword grids in images and edit them interactively."
+description = "Detect crossword grids in images and fill them interactively."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -29,10 +29,10 @@ build = [
 ]
 
 [project.scripts]
-inkwell = "inkwell.cli:main"
+gridfill = "gridfill.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/inkwell"]
+packages = ["src/gridfill"]
 
 [tool.ruff]
 line-length = 100

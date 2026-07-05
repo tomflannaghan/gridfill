@@ -12,9 +12,9 @@ from pathlib import Path
 import cv2
 import pytest
 
-from inkwell.detection import detect_grid
-from inkwell.preprocess import binarize, to_grayscale
-from inkwell.types import RectangularGrid
+from gridfill.detection import detect_grid
+from gridfill.preprocess import binarize, to_grayscale
+from gridfill.types import RectangularGrid
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

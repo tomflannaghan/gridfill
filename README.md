@@ -1,6 +1,6 @@
-# inkwell
+# gridfill
 
-Detect a handwritten crossword grid's layout from a scanned image or PDF and
+Detect a crossword grid's layout from a scanned image or PDF and
 edit it interactively: click a cell, type letters, highlight cells, drop
 free-text annotations, then save your progress as a `.cwd` document or export
 the result as an image.
@@ -24,8 +24,8 @@ To build one yourself:
 
 ```bash
 uv sync --extra build
-uv run pyinstaller --noconfirm --clean packaging/inkwell.spec
-# -> dist/inkwell(.exe)
+uv run pyinstaller --noconfirm --clean packaging/gridfill.spec
+# -> dist/gridfill(.exe)
 ```
 
 PyInstaller doesn't cross-compile, so this produces an executable for
@@ -35,17 +35,17 @@ GitHub-hosted Linux and Windows runners.
 ## Usage
 
 ```bash
-inkwell edit scan.png -o filled_out.png
+gridfill edit scan.png -o filled_out.png
 # A PDF also works; its last page is used:
-inkwell edit scan.pdf
+gridfill edit scan.pdf
 # Or resume a session saved earlier:
-inkwell edit scan.cwd
+gridfill edit scan.cwd
 # Or start blank and use File > Open:
-inkwell edit
+gridfill edit
 ```
 
 ```python
-from inkwell import edit_grid
+from gridfill import edit_grid
 
 # Opens an interactive editor window for every grid found in the image.
 # Also accepts a PDF (its last page is rendered at print resolution), the

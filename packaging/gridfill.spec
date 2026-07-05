@@ -1,9 +1,9 @@
 # PyInstaller spec for the standalone editor executable.
 #
 # Build (from the repo root, with the "build" extra installed):
-#   pyinstaller packaging/inkwell.spec
+#   pyinstaller packaging/gridfill.spec
 #
-# Output lands in dist/inkwell(.exe).
+# Output lands in dist/gridfill(.exe).
 
 import os
 
@@ -18,8 +18,8 @@ a = Analysis(
     binaries=[],
     datas=[
         (
-            os.path.join(repo_root, "src", "inkwell", "assets", "fonts"),
-            os.path.join("inkwell", "assets", "fonts"),
+            os.path.join(repo_root, "src", "gridfill", "assets", "fonts"),
+            os.path.join("gridfill", "assets", "fonts"),
         ),
     ],
     hiddenimports=["PIL._tkinter_finder"],
@@ -39,7 +39,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="inkwell",
+    name="gridfill",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

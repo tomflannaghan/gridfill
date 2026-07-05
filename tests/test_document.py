@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from inkwell.document import load_document, save_document
-from inkwell.errors import DocumentError
-from inkwell.types import Cell, CellKind, RectangularGrid
+from gridfill.document import load_document, save_document
+from gridfill.errors import DocumentError
+from gridfill.types import Cell, CellKind, RectangularGrid
 
 
 def _sample_image() -> np.ndarray:

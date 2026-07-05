@@ -5,10 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from inkwell.detection import detect_grid
-from inkwell.errors import GridDetectionError
-from inkwell.preprocess import binarize, to_grayscale
-from inkwell.types import Cell, RectangularGrid
+from gridfill.detection import detect_grid
+from gridfill.errors import GridDetectionError
+from gridfill.preprocess import binarize, to_grayscale
+from gridfill.types import Cell, RectangularGrid
 
 from .synthetic import make_grid
 

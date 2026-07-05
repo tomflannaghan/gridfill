@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from inkwell.editor import click_to_cell
-from inkwell.types import Cell, Point
+from gridfill.editor import click_to_cell
+from gridfill.types import Cell, Point
 
 
 def _make_cells(rows: int, cols: int, cell_size: int = 100) -> tuple[list[Cell], tuple[int, int]]:
@@ -48,7 +48,7 @@ class TestClickToCell:
 
 
 def test_cli_edit_help() -> None:
-    from inkwell.cli import main
+    from gridfill.cli import main
 
     with pytest.raises(SystemExit) as exc_info:
         main(["edit", "--help"])

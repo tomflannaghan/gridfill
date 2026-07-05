@@ -10,7 +10,7 @@ by hand — click a cell, type letters, highlight cells, add free-text
 annotations — then save progress as a `.cwd` document (JSON: base64 source
 image + grid state) or export the result as an image. PDF input uses the last
 page, rendered at 300 DPI (print quality at A4). Public API: `edit_grid()` in
-`inkwell`. There is no automatic letter recognition; all cell
+`gridfill`. There is no automatic letter recognition; all cell
 content is entered manually.
 
 ## Dev environment & commands

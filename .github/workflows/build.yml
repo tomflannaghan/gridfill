@@ -21,14 +21,14 @@ jobs:
 
       - run: uv sync --extra build
 
-      - run: uv run pyinstaller --noconfirm --clean packaging/inkwell.spec
+      - run: uv run pyinstaller --noconfirm --clean packaging/gridfill.spec
 
       - uses: actions/upload-artifact@v4
         with:
-          name: inkwell-${{ matrix.os }}
+          name: gridfill-${{ matrix.os }}
           path: |
-            dist/inkwell
-            dist/inkwell.exe
+            dist/gridfill
+            dist/gridfill.exe
           if-no-files-found: ignore
 
   release:
@@ -44,8 +44,8 @@ jobs:
 
       - run: |
           mkdir -p release
-          cp artifacts/inkwell-ubuntu-latest/inkwell release/inkwell-linux
-          cp artifacts/inkwell-windows-latest/inkwell.exe release/inkwell-windows.exe
+          cp artifacts/gridfill-ubuntu-latest/gridfill release/gridfill-linux
+          cp artifacts/gridfill-windows-latest/gridfill.exe release/gridfill-windows.exe
 
       - uses: softprops/action-gh-release@v2
         with:
