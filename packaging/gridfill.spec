@@ -21,6 +21,10 @@ a = Analysis(
             os.path.join(repo_root, "src", "gridfill", "assets", "fonts"),
             os.path.join("gridfill", "assets", "fonts"),
         ),
+        (
+            os.path.join(repo_root, "src", "gridfill", "assets", "icon.png"),
+            os.path.join("gridfill", "assets"),
+        ),
     ],
     hiddenimports=["PIL._tkinter_finder"],
     hookspath=[],
@@ -52,4 +56,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=os.path.join(repo_root, "packaging", "icon.ico"),
 )

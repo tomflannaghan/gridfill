@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.resources
 import os
 import tkinter as tk
 import tkinter.colorchooser
@@ -37,6 +38,8 @@ _MAX_DISPLAY_SIZE = 900  # initial window size cap, before the user has resized 
 _RESIZE_DEBOUNCE_MS = 80
 _CELL_FILL_INSET_FRAC = 0.06
 _BLANK_IMAGE_SIZE = (800, 600)  # (width, height), used when starting with no file
+_APP_ICON = importlib.resources.files("gridfill.assets").joinpath("icon.png")
+
 _OPEN_FILETYPES = [
     (
         "Crossword document, image, or PDF",
@@ -252,6 +255,9 @@ class _GridEditor(tk.Tk):
     ) -> None:
         super().__init__()
         self.title("Gridfill")
+        with importlib.resources.as_file(_APP_ICON) as icon_path:
+            self._icon_photo = ImageTk.PhotoImage(Image.open(icon_path))
+        self.iconphoto(True, cast(tk.PhotoImage, self._icon_photo))
 
         self._color = color
         self._highlight_color = _DEFAULT_HIGHLIGHT_COLOR_BGR
