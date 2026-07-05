@@ -21,9 +21,9 @@ from .document import CWD_EXTENSION, load_document, save_document
 from .fonts import FontT, _best_grid, fit_font_size, fit_font_size_multi, font_loader
 from .geometry import (
     bounding_rect,
+    incircle,
     inset_quad,
     point_in_polygon,
-    polygon_size,
     polygon_to_pixels,
 )
 from .io import ImageSource, load_image, save_image
@@ -132,8 +132,8 @@ def _fit_font(
     loader: Callable[[int], FontT],
 ) -> tuple[ImageFont.FreeTypeFont, tuple[int, int]]:
     sample_px = polygon_to_pixels(grid.cells[0].polygon, image_size)
-    ref_w, ref_h = polygon_size(sample_px)
-    return loader(fit_font_size(loader, ref_w, ref_h)), (ref_w, ref_h)
+    _cx, _cy, diameter = incircle(sample_px)
+    return loader(fit_font_size(loader, diameter, diameter)), (diameter, diameter)
 
 
 def _make_grid_states(
@@ -552,8 +552,8 @@ class _GridEditor(tk.Tk):
         if not text:
             return
         polygon_px = polygon_to_pixels(cell.polygon, image_size)
-        cell_w, cell_h = polygon_size(polygon_px)
-        cx, cy = polygon_px.mean(axis=0)
+        cx, cy, diameter = incircle(polygon_px)
+        cell_w = cell_h = diameter
 
         x0, y0, x1, y1 = bounding_rect(polygon_px, image_size, margin=1)
         if x1 <= x0 or y1 <= y0:

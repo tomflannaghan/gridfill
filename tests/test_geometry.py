@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import cv2
 import numpy as np
 import pytest
 
 from gridfill.detection import detect_grid
 from gridfill.errors import GridDetectionError
+from gridfill.geometry import incircle
 from gridfill.preprocess import binarize, to_grayscale
 from gridfill.types import Cell, RectangularGrid
 
@@ -68,6 +70,37 @@ def test_detection_handles_slight_rotation() -> None:
     grid = _detect(rotated)
     assert grid.rows == 5
     assert grid.cols == 5
+
+
+@pytest.mark.parametrize(
+    "polygon",
+    [
+        # Up-pointing triangle: its flat bottom edge lies on the bbox maximum.
+        [(20.0, 0.0), (40.0, 40.0), (0.0, 40.0)],
+        # Right-pointing triangle: its flat right edge lies on the bbox maximum.
+        [(0.0, 0.0), (40.0, 20.0), (0.0, 40.0)],
+        # Rhombus (the isometric-cube cell shape).
+        [(20.0, 0.0), (40.0, 15.0), (20.0, 30.0), (0.0, 15.0)],
+        # Plain square.
+        [(0.0, 0.0), (30.0, 0.0), (30.0, 30.0), (0.0, 30.0)],
+    ],
+)
+def test_incircle_center_is_interior(polygon: list[tuple[float, float]]) -> None:
+    """The incircle center must sit inside the polygon with the full incircle
+    fitting within it.
+
+    Regression: a polygon whose far edge lay on the bounding-box maximum used to
+    lose its zero border in the distance-transform mask, so the peak (and hence
+    the letter anchor) drifted onto that edge instead of the cell interior.
+    """
+    poly = np.array(polygon, dtype=np.float32)
+    cx, cy, diameter = incircle(poly)
+
+    signed = cv2.pointPolygonTest(poly, (cx, cy), True)
+    assert signed > 0  # strictly interior, never on an edge
+    # The reported incircle genuinely fits: the center is at least its radius
+    # away from every edge (allowing 1px for rasterization).
+    assert signed >= diameter / 2 - 1.0
 
 
 def test_raises_when_no_grid_present() -> None:
