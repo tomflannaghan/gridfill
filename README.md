@@ -7,9 +7,13 @@ the result as an image.
 
 ## Standalone executable
 
-No Python install needed. Prebuilt Windows and Linux executables are attached
-to each [release](../../releases). Double-click, or drag a scan/PDF/`.cwd`
-file onto the executable to open it directly.
+No Python install needed. Prebuilt Windows, macOS, and Linux executables are
+attached to each [release](../../releases). Double-click, or drag a
+scan/PDF/`.cwd` file onto the executable to open it directly.
+
+The macOS build is unsigned, so Gatekeeper will refuse to open it with a
+plain double-click the first time; right-click the executable and choose
+**Open** instead, then confirm in the dialog that appears.
 
 ## Usage
 

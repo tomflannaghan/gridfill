@@ -13,7 +13,7 @@ uv pip install -e ".[dev]"
 
 ## Standalone executable
 
-Prebuilt Windows and Linux executables are attached to each
+Prebuilt Windows, macOS, and Linux executables are attached to each
 [release](../../releases), built by
 [.github/workflows/build.yml](.github/workflows/build.yml) via PyInstaller.
 
@@ -34,8 +34,9 @@ problem, so long as it has tkinter available (`python3 -c "import tkinter"`;
 install your distro's `python3-tkinter`/`python3-tk` package if that fails).
 
 PyInstaller doesn't cross-compile, so this produces an executable for
-whichever OS you run it on; the release workflow builds both by running on
-GitHub-hosted Linux and Windows runners.
+whichever OS you run it on; the release workflow builds all three by running
+on GitHub-hosted Linux, Windows, and macOS runners. The macOS runner is
+Apple Silicon, so that build is arm64-only.
 
 ### App icon
 

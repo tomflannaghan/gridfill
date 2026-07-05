@@ -10,7 +10,7 @@ jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     # PyInstaller needs to link against a Tcl/Tk that's actually consistent
     # with the running Python -- uv's managed (python-build-standalone) builds
@@ -55,6 +55,7 @@ jobs:
           mkdir -p release
           cp artifacts/gridfill-ubuntu-latest/gridfill release/gridfill-linux
           cp artifacts/gridfill-windows-latest/gridfill.exe release/gridfill-windows.exe
+          cp artifacts/gridfill-macos-latest/gridfill release/gridfill-macos
 
       - uses: softprops/action-gh-release@v2
         with:
