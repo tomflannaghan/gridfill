@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageTk
 
 from .detection import detect_grids
 from .document import CWD_EXTENSION, load_document, save_document
-from .fonts import FontT, _best_grid, fit_font_size, fit_font_size_multi, font_loader
+from .fonts import FontT, best_grid, fit_font_size, fit_font_size_multi, font_loader
 from .geometry import (
     bounding_rect,
     incircle,
@@ -74,9 +74,9 @@ class _GridState:
 
     grid: Grid
     single_font: ImageFont.FreeTypeFont
-    ref_cell_size: tuple[int, int]
+    ref_cell_size: int
     display_single_font: ImageFont.FreeTypeFont
-    display_ref_cell_size: tuple[int, int]
+    display_ref_cell_size: int
     multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont] = field(default_factory=dict)
     display_multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont] = field(
         default_factory=dict
@@ -130,10 +130,12 @@ def _fit_font(
     grid: Grid,
     image_size: tuple[int, int],
     loader: Callable[[int], FontT],
-) -> tuple[ImageFont.FreeTypeFont, tuple[int, int]]:
+) -> tuple[ImageFont.FreeTypeFont, int]:
+    """Fit a font to the grid's reference cell size (the incircle diameter of
+    its first cell) and return the font plus that size."""
     sample_px = polygon_to_pixels(grid.cells[0].polygon, image_size)
     _cx, _cy, diameter = incircle(sample_px)
-    return loader(fit_font_size(loader, diameter, diameter)), (diameter, diameter)
+    return loader(fit_font_size(loader, diameter, diameter)), diameter
 
 
 def _make_grid_states(
@@ -275,7 +277,6 @@ class _GridEditor(tk.Tk):
         self._resize_job: str | None = None
         self._last_canvas_box: tuple[int, int] | None = None
         self._has_loaded = False
-        self._is_blank = False
 
         self._canvas = tk.Canvas(self, bg=_CANVAS_BG_HEX, highlightthickness=0)
         self._canvas.pack(fill=tk.BOTH, expand=True)
@@ -376,7 +377,7 @@ class _GridEditor(tk.Tk):
             )
 
         _fit_display_fonts(self._grid_states, self._display_size, self._loader)
-        self._base_image_display = self._compute_base_image(self._display_image, self._grid_states)
+        self._recompute_base()
         self._render_and_display()
 
     def _on_canvas_resize(self, event: tk.Event[tk.Canvas]) -> None:
@@ -545,7 +546,7 @@ class _GridEditor(tk.Tk):
         cell: Cell,
         image_size: tuple[int, int],
         single_font: ImageFont.FreeTypeFont,
-        ref_cell_size: tuple[int, int],
+        ref_cell_size: int,
         multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont],
     ) -> None:
         text = (cell.letter or "").upper()
@@ -574,10 +575,10 @@ class _GridEditor(tk.Tk):
                 anchor="mm",
             )
         else:
-            ref_w, ref_h = ref_cell_size
-            grid_shape = _best_grid(len(text), ref_w, ref_h)
+            ref = ref_cell_size
+            grid_shape = best_grid(len(text), ref, ref)
             if grid_shape not in multi_font_cache:
-                size = fit_font_size_multi(self._loader, ref_w, ref_h, grid_shape[0], grid_shape[1])
+                size = fit_font_size_multi(self._loader, ref, ref, grid_shape[0], grid_shape[1])
                 multi_font_cache[grid_shape] = self._loader(size)
             font = multi_font_cache[grid_shape]
             nrows, ncols = grid_shape

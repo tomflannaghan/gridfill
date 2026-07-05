@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 
-class TranscriberError(Exception):
+class GridfillError(Exception):
     """Base class for all library errors."""
 
 
-class GridDetectionError(TranscriberError):
+class GridDetectionError(GridfillError):
     """Raised when no crossword grid could be located in an image."""
 
 
-class GridSegmentationError(TranscriberError):
+class GridSegmentationError(GridfillError):
     """Raised when a detected grid could not be split into cells."""
 
 
@@ -25,5 +25,5 @@ class MultipleGridsError(GridDetectionError):
         )
 
 
-class DocumentError(TranscriberError):
+class DocumentError(GridfillError):
     """Raised when a saved ``.cwd`` document is missing, malformed, or unreadable."""

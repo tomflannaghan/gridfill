@@ -16,7 +16,6 @@ from .types import (
     Direction,
     Grid,
     IrregularGrid,
-    LetterGrid,
     Point,
     RectangularGrid,
 )
@@ -32,7 +31,6 @@ __all__ = [
     "CellKind",
     "Direction",
     "Point",
-    "LetterGrid",
     "GridDetectionError",
     "MultipleGridsError",
     "DocumentError",

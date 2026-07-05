@@ -76,7 +76,7 @@ def fit_font_size(
     return size
 
 
-def _best_grid(n: int, cell_width: int, cell_height: int) -> tuple[int, int]:
+def best_grid(n: int, cell_width: int, cell_height: int) -> tuple[int, int]:
     """Choose rows x cols to arrange *n* characters with the best aspect ratio."""
     best: tuple[int, int] = (n, 1)
     best_waste = float("inf")

@@ -14,6 +14,7 @@ import numpy as np
 from ..errors import GridDetectionError, GridSegmentationError, MultipleGridsError
 from ..segmentation import infer_cell_boxes
 from ..types import BoundingBox, Cell, Point, RectangularGrid
+from .ordering import reading_order
 
 
 @dataclass
@@ -110,18 +111,7 @@ def _find_grid_quads(line_mask: np.ndarray) -> list[np.ndarray]:
         cy = float(quad[:, 1].mean())
         quads.append((cy, cx, quad))
 
-    row_band = h * _ROW_BAND_FRAC
-    quads.sort(key=lambda t: (t[0], t[1]))
-    rows: list[list[tuple[float, float, np.ndarray]]] = []
-    for item in quads:
-        if rows and abs(item[0] - rows[-1][0][0]) < row_band:
-            rows[-1].append(item)
-        else:
-            rows.append([item])
-    for row in rows:
-        row.sort(key=lambda t: t[1])
-
-    return [quad for row in rows for _, _, quad in row]
+    return reading_order(quads, band=h * _ROW_BAND_FRAC)
 
 
 def _rectify_quad(line_mask: np.ndarray, quad: np.ndarray) -> _RectifiedLattice:

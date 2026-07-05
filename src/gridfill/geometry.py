@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import cv2
 import numpy as np
 
-from .types import Point
+if TYPE_CHECKING:
+    # Only needed for annotations (stringized by ``from __future__ import
+    # annotations``). Keeping it out of the runtime imports lets :mod:`types`
+    # depend on this module for its pure-geometry helpers without a cycle.
+    from .types import Point
 
 
 def polygon_to_pixels(polygon: list[Point], image_size: tuple[int, int]) -> np.ndarray:
@@ -74,3 +80,35 @@ def bounding_rect(
     x1 = min(int(np.ceil(polygon_px[:, 0].max())) + margin, w)
     y1 = min(int(np.ceil(polygon_px[:, 1].max())) + margin, h)
     return x0, y0, x1, y1
+
+
+def convex_hull(points: list[Point]) -> list[Point]:
+    """Counter-clockwise convex hull of *points* (Andrew's monotone chain).
+
+    Pure Python (no cv2) so it works on normalized ``[0, 1]`` polygon vertices
+    without going through a pixel array.
+    """
+    pts = sorted(set(points))
+    if len(pts) <= 2:
+        return pts
+
+    def cross(o: Point, a: Point, b: Point) -> float:
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower: list[Point] = []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper: list[Point] = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
+def polygon_centroid(polygon: list[Point]) -> Point:
+    """Mean of a polygon's vertices -- a cheap, good-enough cell centre."""
+    n = len(polygon)
+    return sum(x for x, _ in polygon) / n, sum(y for _, y in polygon) / n

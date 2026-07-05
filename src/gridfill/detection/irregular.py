@@ -27,6 +27,7 @@ import numpy as np
 
 from ..errors import GridDetectionError
 from ..types import Cell, IrregularGrid, Point
+from .ordering import reading_order
 
 # Close ink gaps so every cell interior is fully enclosed before labelling.
 _GAP_CLOSE_KERNEL = 3
@@ -185,21 +186,6 @@ def _cell_polygon(labels: np.ndarray, stats: np.ndarray, label: int) -> list[Poi
     return [(float(px + x0) / width, float(py + y0) / height) for px, py in approx]
 
 
-def _reading_order(items: list[tuple[float, float, int]], band: float) -> list[int]:
-    """Sort ``(cy, cx, payload)`` items top-to-bottom in rows, left-to-right
-    within a row (rows being centroids grouped within *band* vertically)."""
-    ordered = sorted(items, key=lambda t: (t[0], t[1]))
-    rows: list[list[tuple[float, float, int]]] = []
-    for item in ordered:
-        if rows and abs(item[0] - rows[-1][0][0]) < band:
-            rows[-1].append(item)
-        else:
-            rows.append([item])
-    for row in rows:
-        row.sort(key=lambda t: t[1])
-    return [payload for row in rows for _, _, payload in row]
-
-
 def detect_irregular_grids(binary: np.ndarray) -> list[IrregularGrid]:
     """Detect all irregular grids in a binarized image, in reading order.
 
@@ -224,13 +210,13 @@ def detect_irregular_grids(binary: np.ndarray) -> list[IrregularGrid]:
         cell_items = [
             (float(centroids[label][1]), float(centroids[label][0]), label) for label in group
         ]
-        ordered_labels = _reading_order(cell_items, band=_CELL_ROW_BAND * median_h)
+        ordered_labels = reading_order(cell_items, band=_CELL_ROW_BAND * median_h)
         grid_cells = [Cell(polygon=_cell_polygon(labels, stats, label)) for label in ordered_labels]
         group_cx = float(np.mean([centroids[label][0] for label in group]))
         group_cy = float(np.mean([centroids[label][1] for label in group]))
         grids.append((group_cy, group_cx, IrregularGrid(cells=grid_cells)))
 
-    order = _reading_order(
+    order = reading_order(
         [(cy, cx, i) for i, (cy, cx, _) in enumerate(grids)], band=_GRID_ROW_BAND * height
     )
     return [grids[i][2] for i in order]

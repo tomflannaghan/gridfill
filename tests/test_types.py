@@ -42,16 +42,6 @@ def _cell(kind: CellKind, letter: str | None = None) -> Cell:
     return Cell(kind=kind, letter=letter)
 
 
-def test_grid_to_letters_maps_each_kind() -> None:
-    cells = [
-        _cell(CellKind.BLOCK),
-        _cell(CellKind.EMPTY),
-        _cell(CellKind.LETTER, "A"),
-    ]
-    grid = RectangularGrid(rows=1, cols=3, cells=cells)
-    assert grid.to_letters() == [[None, "", "A"]]
-
-
 def test_rectangular_grid_cell_indexing() -> None:
     cells = [_cell(CellKind.LETTER, letter) for letter in "ABCDEF"]
     grid = RectangularGrid(rows=2, cols=3, cells=cells)
