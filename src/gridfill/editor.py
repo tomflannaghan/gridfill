@@ -14,20 +14,15 @@ from typing import cast
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont, ImageTk
+from PIL import Image, ImageFont, ImageTk
 
 from .detection import detect_grids
 from .document import CWD_EXTENSION, load_document, save_document
-from .fonts import FontT, best_grid, fit_font_size, fit_font_size_multi, font_loader
-from .geometry import (
-    bounding_rect,
-    incircle,
-    inset_quad,
-    point_in_polygon,
-    polygon_to_pixels,
-)
+from .fonts import FontT, fit_font_size, font_loader
+from .geometry import incircle, point_in_polygon, polygon_to_pixels
 from .io import ImageSource, load_image, save_image
 from .preprocess import binarize, to_grayscale
+from .renderer import GridLayer, GridRenderer
 from .types import Cell, CellKind, Direction, Grid
 
 _KEYSYM_TO_DIRECTION = {
@@ -37,17 +32,12 @@ _KEYSYM_TO_DIRECTION = {
     "Right": Direction.RIGHT,
 }
 
-_SELECTION_BGR = (255, 180, 0)
 _DEFAULT_HIGHLIGHT_COLOR_BGR = (0, 255, 255)
-_ACTIVE_GRID_BGR = (0, 180, 0)
-_WHITE_DISTANCE_THRESHOLD = 30
 _MAX_DISPLAY_SIZE = 900  # initial window size cap, before the user has resized it
 _RESIZE_DEBOUNCE_MS = 80
-_CELL_FILL_INSET_FRAC = 0.06
 _BLANK_IMAGE_SIZE = (800, 600)  # (width, height), used when starting with no file
 _CANVAS_BG_HEX = "#d9d9d9"  # Tk's classic widget grey, used for canvas letterboxing
 _CANVAS_BG_BGR = (217, 217, 217)  # same colour as _CANVAS_BG_HEX, for compositing
-_BLANK_ICON_SIZE_FRAC = 0.4  # fraction of the shorter canvas side the blank-state icon spans
 _APP_ICON = importlib.resources.files("gridfill.assets").joinpath("icon.png")
 
 _OPEN_FILETYPES = [
@@ -267,13 +257,13 @@ class _GridEditor(tk.Tk):
         with importlib.resources.as_file(_APP_ICON) as icon_path:
             icon_image = Image.open(icon_path).convert("RGBA")
             self._icon_photo = ImageTk.PhotoImage(icon_image)
-            self._icon_bgra = cv2.cvtColor(np.array(icon_image), cv2.COLOR_RGBA2BGRA)
+            icon_bgra = cv2.cvtColor(np.array(icon_image), cv2.COLOR_RGBA2BGRA)
         self.iconphoto(True, cast(tk.PhotoImage, self._icon_photo))
 
-        self._color = color
         self._highlight_color = _DEFAULT_HIGHLIGHT_COLOR_BGR
         self._out_path = out_path
         self._loader = loader
+        self._renderer = GridRenderer(color=color, loader=loader, icon_bgra=icon_bgra)
         self._resize_job: str | None = None
         self._last_canvas_box: tuple[int, int] | None = None
         self._has_loaded = False
@@ -469,192 +459,62 @@ class _GridEditor(tk.Tk):
         self._render_and_display()
 
     # ------------------------------------------------------------------
-    # Base image (backgrounds + highlights for all grids)
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _cell_highlight_color(cell: Cell) -> tuple[int, int, int] | None:
-        bg = cell.background
-        if bg is None:
-            return None
-        dist = sum((a - 255) ** 2 for a in bg)
-        if dist < _WHITE_DISTANCE_THRESHOLD**2:
-            return None
-        return bg
-
-    @classmethod
-    def _compute_base_image(
-        cls,
-        image: np.ndarray,
-        grid_states: list[_GridState],
-    ) -> np.ndarray:
-        src_h, src_w = image.shape[:2]
-        result = image.astype(np.float32).copy()
-
-        for gs in grid_states:
-            for cell in gs.grid.cells:
-                if cell.kind is CellKind.BLOCK:
-                    continue
-                bg = cls._cell_highlight_color(cell)
-                if bg is None:
-                    continue
-                polygon_px = polygon_to_pixels(cell.polygon, (src_w, src_h))
-                inset_px = inset_quad(polygon_px, _CELL_FILL_INSET_FRAC)
-                x0, y0, x1, y1 = bounding_rect(inset_px, (src_w, src_h))
-                if x1 <= x0 or y1 <= y0:
-                    continue
-                mask = np.zeros((y1 - y0, x1 - x0), dtype=np.uint8)
-                cv2.fillConvexPoly(mask, (inset_px - [x0, y0]).astype(np.int32), 255)
-                alpha = (mask.astype(np.float32) / 255.0)[:, :, None]
-                fill = np.array(bg, dtype=np.float32).reshape(1, 1, 3)
-                result[y0:y1, x0:x1] = result[y0:y1, x0:x1] * (1 - alpha) + fill * alpha
-
-        return np.asarray(np.clip(result, 0, 255).round().astype(np.uint8))
-
-    def _draw_centered_icon(self, image: np.ndarray) -> np.ndarray:
-        """Alpha-blend the app icon centered on *image* (used for the blank state)."""
-        h, w = image.shape[:2]
-        icon_h, icon_w = self._icon_bgra.shape[:2]
-        size = min(icon_w, icon_h, int(min(w, h) * _BLANK_ICON_SIZE_FRAC))
-        if size <= 0:
-            return image
-        icon = cv2.resize(self._icon_bgra, (size, size), interpolation=cv2.INTER_AREA)
-        x0, y0 = (w - size) // 2, (h - size) // 2
-        result = image.copy()
-        region = result[y0 : y0 + size, x0 : x0 + size].astype(np.float32)
-        alpha = icon[:, :, 3:4].astype(np.float32) / 255.0
-        fg = icon[:, :, :3].astype(np.float32)
-        blended = fg * alpha + region * (1 - alpha)
-        result[y0 : y0 + size, x0 : x0 + size] = blended.round().astype(np.uint8)
-        return result
-
-    def _recompute_base(self) -> None:
-        """Refresh the display-resolution base image.
-
-        The full-resolution base is recomputed on demand at export time
-        (see :meth:`_render`), so there is nothing to refresh here for it.
-        """
-        self._base_image_display = self._compute_base_image(self._display_image, self._grid_states)
-
-    # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
 
-    def _draw_letter_in_cell(
-        self,
-        result: np.ndarray,
-        cell: Cell,
-        image_size: tuple[int, int],
-        single_font: ImageFont.FreeTypeFont,
-        ref_cell_size: int,
-        multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont],
-    ) -> None:
-        text = (cell.letter or "").upper()
-        if not text:
-            return
-        polygon_px = polygon_to_pixels(cell.polygon, image_size)
-        cx, cy, diameter = incircle(polygon_px)
-        cell_w = cell_h = diameter
-
-        x0, y0, x1, y1 = bounding_rect(polygon_px, image_size, margin=1)
-        if x1 <= x0 or y1 <= y0:
-            return
-        local_cx, local_cy = cx - x0, cy - y0
-
-        pil_img = Image.fromarray(cv2.cvtColor(result[y0:y1, x0:x1], cv2.COLOR_BGR2RGB))
-        draw = ImageDraw.Draw(pil_img)
-        b, g, r = self._color
-        rgb_color = (r, g, b)
-
-        if len(text) == 1:
-            draw.text(
-                (local_cx, local_cy),
-                text,
-                font=single_font,
-                fill=rgb_color,
-                anchor="mm",
-            )
-        else:
-            ref = ref_cell_size
-            grid_shape = best_grid(len(text), ref, ref)
-            if grid_shape not in multi_font_cache:
-                size = fit_font_size_multi(self._loader, ref, ref, grid_shape[0], grid_shape[1])
-                multi_font_cache[grid_shape] = self._loader(size)
-            font = multi_font_cache[grid_shape]
-            nrows, ncols = grid_shape
-            slot_w, slot_h = cell_w / ncols, cell_h / nrows
-            top_left_x, top_left_y = local_cx - cell_w / 2, local_cy - cell_h / 2
-            for i, ch in enumerate(text):
-                ri, ci = divmod(i, ncols)
-                draw.text(
-                    (top_left_x + (ci + 0.5) * slot_w, top_left_y + (ri + 0.5) * slot_h),
-                    ch,
-                    font=font,
-                    fill=rgb_color,
-                    anchor="mm",
-                )
-
-        result[y0:y1, x0:x1] = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+    def _recompute_base(self) -> None:
+        """Refresh the cached display-resolution base image (backgrounds and
+        highlights). The full-resolution base is recomputed on demand at export
+        time (see :meth:`_render`), so there is nothing to refresh here for it."""
+        grids = [gs.grid for gs in self._grid_states]
+        self._base_image_display = self._renderer.compute_base_image(self._display_image, grids)
 
     def _render(self, *, for_save: bool = False) -> np.ndarray:
+        """Composite the current frame via :class:`~gridfill.renderer.GridRenderer`.
+
+        A ``for_save`` render works from the untouched full-resolution image with
+        the export fonts and drops the interactive chrome (blank-state icon,
+        active-grid indicator, selection); the interactive render uses the cached
+        downscaled base image and display fonts.
+        """
         if for_save:
-            base = self._compute_base_image(self._image, self._grid_states)
+            base = self._renderer.compute_base_image(
+                self._image, [gs.grid for gs in self._grid_states]
+            )
             image_size = self._src_size
+            layers = [
+                GridLayer(gs.grid, gs.single_font, gs.ref_cell_size, gs.multi_font_cache)
+                for gs in self._grid_states
+            ]
         else:
             base = self._base_image_display
             image_size = self._display_size
-        result = base.copy()
+            layers = [
+                GridLayer(
+                    gs.grid,
+                    gs.display_single_font,
+                    gs.display_ref_cell_size,
+                    gs.display_multi_font_cache,
+                )
+                for gs in self._grid_states
+            ]
 
-        if not for_save and self._is_blank:
-            result = self._draw_centered_icon(result)
-
-        for gs in self._grid_states:
-            single_font, ref_cell_size, multi_font_cache = (
-                (gs.single_font, gs.ref_cell_size, gs.multi_font_cache)
-                if for_save
-                else (gs.display_single_font, gs.display_ref_cell_size, gs.display_multi_font_cache)
-            )
-            for cell in gs.grid.cells:
-                if cell.kind is CellKind.LETTER and cell.letter:
-                    self._draw_letter_in_cell(
-                        result, cell, image_size, single_font, ref_cell_size, multi_font_cache
-                    )
-
-        # Active grid indicator
-        if not for_save and self._active_grid_index is not None and len(self._grid_states) > 1:
-            gs = self._grid_states[self._active_grid_index]
-            hull_px = polygon_to_pixels(gs.grid.bounding_polygon(), image_size).astype(np.int32)
-            cv2.polylines(result, [hull_px], True, _ACTIVE_GRID_BGR, 2)
-
-        # Cell selection highlight
-        if not for_save and self._selected is not None and self._active_grid_index is not None:
-            gs = self._grid_states[self._active_grid_index]
-            cell = gs.grid.cells[self._selected]
-            poly_px = polygon_to_pixels(cell.polygon, image_size).astype(np.int32)
-            thickness = 3 if self._multi_entry else 2
-            cv2.polylines(result, [poly_px], True, _SELECTION_BGR, thickness)
-
-        # Text annotations -- stored in normalized [0, 1] source coordinates
-        # (like cell polygons), so scale them to the current image space.
+        annotation_font: FontT | None = None
         if self._annotations:
             gs = self._active or self._grid_states[0]
-            font = gs.single_font if for_save else gs.display_single_font
-            img_w, img_h = image_size
-            pil_img = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
-            draw = ImageDraw.Draw(pil_img)
-            b, g, r = self._color
-            rgb_color = (r, g, b)
-            for ax, ay, text in self._annotations:
-                draw.text(
-                    (ax * img_w, ay * img_h),
-                    text,
-                    font=font,
-                    fill=rgb_color,
-                    anchor="ls",
-                )
-            result = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+            annotation_font = gs.single_font if for_save else gs.display_single_font
 
-        return result
+        return self._renderer.render(
+            base,
+            image_size,
+            layers,
+            annotations=self._annotations,
+            annotation_font=annotation_font,
+            draw_blank_icon=not for_save and self._is_blank,
+            active_grid_index=None if for_save else self._active_grid_index,
+            selected=None if for_save else self._selected,
+            multi_entry=self._multi_entry,
+        )
 
     def _render_and_display(self) -> None:
         rendered = self._render()
@@ -822,6 +682,10 @@ class _GridEditor(tk.Tk):
     # ------------------------------------------------------------------
 
     def _add_annotation(self, display_x: float, display_y: float) -> None:
+        # Nothing loaded yet: there's no document to annotate (and no grid to
+        # size the text against), so ignore the double-click.
+        if self._is_blank:
+            return
         text = tkinter.simpledialog.askstring("Add Text", "Enter text:", parent=self)
         if not text:
             return
