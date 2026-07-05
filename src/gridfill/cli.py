@@ -7,11 +7,10 @@ from collections.abc import Sequence
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="gridfill")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    p_edit = sub.add_parser("edit", help="Interactively edit a grid overlaid on its image.")
-    p_edit.add_argument(
+    parser = argparse.ArgumentParser(
+        prog="gridfill", description="Interactively edit a grid overlaid on its image."
+    )
+    parser.add_argument(
         "path",
         nargs="?",
         default=None,
@@ -21,22 +20,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             "editor and use File > Open."
         ),
     )
-    p_edit.add_argument("-o", "--out", help="Default output path for exporting the rendered image.")
-    p_edit.add_argument("--font", help="Path to a TrueType font file.")
+    parser.add_argument("-o", "--out", help="Default output path for exporting the rendered image.")
+    parser.add_argument("--font", help="Path to a TrueType font file.")
 
     args = parser.parse_args(argv)
 
-    if args.command == "edit":
-        from .editor import edit_grid
+    from .editor import edit_grid
 
-        edit_grid(
-            args.path,
-            out_path=args.out,
-            font_path=args.font,
-        )
-        return 0
-
-    return 1
+    edit_grid(
+        args.path,
+        out_path=args.out,
+        font_path=args.font,
+    )
+    return 0
 
 
 if __name__ == "__main__":

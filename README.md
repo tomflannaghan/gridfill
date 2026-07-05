@@ -54,13 +54,13 @@ img.save('packaging/icon.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),
 ## Usage
 
 ```bash
-gridfill edit scan.png -o filled_out.png
+gridfill scan.png -o filled_out.png
 # A PDF also works; its last page is used:
-gridfill edit scan.pdf
+gridfill scan.pdf
 # Or resume a session saved earlier:
-gridfill edit scan.cwd
+gridfill scan.cwd
 # Or start blank and use File > Open:
-gridfill edit
+gridfill
 ```
 
 ```python

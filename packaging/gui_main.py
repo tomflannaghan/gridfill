@@ -1,4 +1,4 @@
-"""PyInstaller entry point: launch the editor like ``gridfill edit``.
+"""PyInstaller entry point: launch the editor like ``gridfill``.
 
 A plain script (rather than pointing PyInstaller at the console entry point)
 so a file dropped onto the packaged executable is picked up as the path to
@@ -12,4 +12,4 @@ import sys
 from gridfill.cli import main
 
 if __name__ == "__main__":
-    raise SystemExit(main(["edit", *sys.argv[1:]]))
+    raise SystemExit(main(sys.argv[1:]))

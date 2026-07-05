@@ -51,5 +51,5 @@ def test_cli_edit_help() -> None:
     from gridfill.cli import main
 
     with pytest.raises(SystemExit) as exc_info:
-        main(["edit", "--help"])
+        main(["--help"])
     assert exc_info.value.code == 0
