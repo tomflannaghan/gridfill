@@ -38,6 +38,9 @@ _MAX_DISPLAY_SIZE = 900  # initial window size cap, before the user has resized 
 _RESIZE_DEBOUNCE_MS = 80
 _CELL_FILL_INSET_FRAC = 0.06
 _BLANK_IMAGE_SIZE = (800, 600)  # (width, height), used when starting with no file
+_CANVAS_BG_HEX = "#d9d9d9"  # Tk's classic widget grey, used for canvas letterboxing
+_CANVAS_BG_BGR = (217, 217, 217)  # same colour as _CANVAS_BG_HEX, for compositing
+_BLANK_ICON_SIZE_FRAC = 0.4  # fraction of the shorter canvas side the blank-state icon spans
 _APP_ICON = importlib.resources.files("gridfill.assets").joinpath("icon.png")
 
 _OPEN_FILETYPES = [
@@ -78,7 +81,7 @@ _SavePath = str | os.PathLike[str] | None
 
 def _blank_image() -> np.ndarray:
     w, h = _BLANK_IMAGE_SIZE
-    return np.full((h, w, 3), 255, dtype=np.uint8)
+    return np.full((h, w, 3), _CANVAS_BG_BGR, dtype=np.uint8)
 
 
 def _default_save_name(input_path: _SavePath, extension: str) -> str | None:
@@ -217,6 +220,7 @@ def edit_grid(
         save_path=save_path,
         input_path=input_path,
         annotations=annotations,
+        is_blank=source is None,
     )
     editor.mainloop()
     return [gs.grid for gs in editor._grid_states]
@@ -252,11 +256,14 @@ class _GridEditor(tk.Tk):
         save_path: str | os.PathLike[str] | None = None,
         input_path: str | os.PathLike[str] | None = None,
         annotations: list[tuple[float, float, str]] | None = None,
+        is_blank: bool = False,
     ) -> None:
         super().__init__()
         self.title("Gridfill")
         with importlib.resources.as_file(_APP_ICON) as icon_path:
-            self._icon_photo = ImageTk.PhotoImage(Image.open(icon_path))
+            icon_image = Image.open(icon_path).convert("RGBA")
+            self._icon_photo = ImageTk.PhotoImage(icon_image)
+            self._icon_bgra = cv2.cvtColor(np.array(icon_image), cv2.COLOR_RGBA2BGRA)
         self.iconphoto(True, cast(tk.PhotoImage, self._icon_photo))
 
         self._color = color
@@ -266,8 +273,9 @@ class _GridEditor(tk.Tk):
         self._resize_job: str | None = None
         self._last_canvas_box: tuple[int, int] | None = None
         self._has_loaded = False
+        self._is_blank = False
 
-        self._canvas = tk.Canvas(self)
+        self._canvas = tk.Canvas(self, bg=_CANVAS_BG_HEX, highlightthickness=0)
         self._canvas.pack(fill=tk.BOTH, expand=True)
         self._photo: ImageTk.PhotoImage | None = None
         self._canvas_image = self._canvas.create_image(0, 0, anchor=tk.NW)
@@ -279,7 +287,7 @@ class _GridEditor(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
         self._build_menu()
-        self._load_state(image, grids, save_path, input_path, annotations)
+        self._load_state(image, grids, save_path, input_path, annotations, is_blank=is_blank)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -292,6 +300,8 @@ class _GridEditor(tk.Tk):
         save_path: str | os.PathLike[str] | None,
         input_path: str | os.PathLike[str] | None,
         annotations: list[tuple[float, float, str]] | None,
+        *,
+        is_blank: bool = False,
     ) -> None:
         """(Re)initialize all editing state from a freshly loaded image/grids.
 
@@ -306,6 +316,7 @@ class _GridEditor(tk.Tk):
         self._image = image
         self._save_path = save_path
         self._input_path = input_path
+        self._is_blank = is_blank
 
         src_h, src_w = image.shape[:2]
         self._src_size = (src_w, src_h)
@@ -498,6 +509,23 @@ class _GridEditor(tk.Tk):
 
         return np.asarray(np.clip(result, 0, 255).round().astype(np.uint8))
 
+    def _draw_centered_icon(self, image: np.ndarray) -> np.ndarray:
+        """Alpha-blend the app icon centered on *image* (used for the blank state)."""
+        h, w = image.shape[:2]
+        icon_h, icon_w = self._icon_bgra.shape[:2]
+        size = min(icon_w, icon_h, int(min(w, h) * _BLANK_ICON_SIZE_FRAC))
+        if size <= 0:
+            return image
+        icon = cv2.resize(self._icon_bgra, (size, size), interpolation=cv2.INTER_AREA)
+        x0, y0 = (w - size) // 2, (h - size) // 2
+        result = image.copy()
+        region = result[y0 : y0 + size, x0 : x0 + size].astype(np.float32)
+        alpha = icon[:, :, 3:4].astype(np.float32) / 255.0
+        fg = icon[:, :, :3].astype(np.float32)
+        blended = fg * alpha + region * (1 - alpha)
+        result[y0 : y0 + size, x0 : x0 + size] = blended.round().astype(np.uint8)
+        return result
+
     def _recompute_base(self) -> None:
         """Refresh the display-resolution base image.
 
@@ -574,6 +602,9 @@ class _GridEditor(tk.Tk):
             base = self._base_image_display
             image_size = self._display_size
         result = base.copy()
+
+        if not for_save and self._is_blank:
+            result = self._draw_centered_icon(result)
 
         for gs in self._grid_states:
             single_font, ref_cell_size, multi_font_cache = (
