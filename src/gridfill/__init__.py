@@ -12,7 +12,7 @@ from .editor import edit_grid
 from .errors import DocumentError, GridDetectionError, MultipleGridsError
 from .types import Cell, CellKind, Grid, LetterGrid, Point, RectangularGrid
 
-__version__ = "0.1.0"
+__version__ = "0.1.0a"
 
 __all__ = [
     "edit_grid",
