@@ -81,10 +81,6 @@ plus all grid state, so you can reopen and keep editing); `Ctrl+Shift+S`
 exports the rendered image. See the menu bar for highlighting and free-text
 annotation tools.
 
-## Scope (v1)
-
-Clean scans; square uniform grids (blocked **and** barred); fully offline.
-
 ## Development
 
 ```bash
