@@ -18,12 +18,16 @@ def point_in_polygon(x: float, y: float, polygon_px: np.ndarray) -> bool:
     return cv2.pointPolygonTest(polygon_px, (float(x), float(y)), False) >= 0
 
 
-def quad_size(polygon_px: np.ndarray) -> tuple[int, int]:
-    """Approximate (width, height) in pixels of a TL/TR/BR/BL quad."""
-    top_left, top_right, bottom_right, bottom_left = polygon_px
-    width = (np.linalg.norm(top_right - top_left) + np.linalg.norm(bottom_right - bottom_left)) / 2
-    height = (np.linalg.norm(bottom_left - top_left) + np.linalg.norm(bottom_right - top_right)) / 2
-    return max(1, int(round(float(width)))), max(1, int(round(float(height))))
+def polygon_size(polygon_px: np.ndarray) -> tuple[int, int]:
+    """Approximate (width, height) in pixels of a polygon, from its extent.
+
+    Uses the axis-aligned bounding box so it works for a cell of any shape
+    (square, rhombus, hexagon, curved wedge), not just a 4-corner quad.
+    """
+    xs, ys = polygon_px[:, 0], polygon_px[:, 1]
+    width = float(xs.max() - xs.min())
+    height = float(ys.max() - ys.min())
+    return max(1, int(round(width))), max(1, int(round(height)))
 
 
 def inset_quad(polygon_px: np.ndarray, frac: float) -> np.ndarray:

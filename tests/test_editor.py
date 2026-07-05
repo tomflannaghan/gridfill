@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import numpy as np
 import pytest
 
-from gridfill.editor import click_to_cell
-from gridfill.types import Cell, Point
+from gridfill.document import save_document
+from gridfill.editor import _load_source, click_to_cell
+from gridfill.types import Cell, IrregularGrid, Point
 
 
 def _make_cells(rows: int, cols: int, cell_size: int = 100) -> tuple[list[Cell], tuple[int, int]]:
@@ -45,6 +49,20 @@ class TestClickToCell:
         cells, size = _make_cells(3, 3, cell_size=100)
         result = click_to_cell(250.0, 250.0, scale=1.0, image_size=size, cells=cells)
         assert result == 8
+
+
+def test_load_source_accepts_irregular_document(tmp_path: Path) -> None:
+    """The editor loader now opens any grid type -- it used to reject
+    non-rectangular grids with NotImplementedError."""
+    image = np.full((100, 100, 3), 255, dtype=np.uint8)
+    grid = IrregularGrid(cells=[Cell(polygon=[(0.1, 0.1), (0.2, 0.1), (0.2, 0.2), (0.1, 0.2)])])
+    path = tmp_path / "doc.cwd"
+    save_document(path, image, [grid], [])
+
+    _loaded_image, grids, save_path, annotations = _load_source(str(path))
+    assert len(grids) == 1
+    assert isinstance(grids[0], IrregularGrid)
+    assert save_path == str(path)
 
 
 def test_cli_edit_help() -> None:

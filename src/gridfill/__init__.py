@@ -10,7 +10,16 @@ from __future__ import annotations
 from .document import CWD_EXTENSION, Document, load_document, save_document
 from .editor import edit_grid
 from .errors import DocumentError, GridDetectionError, MultipleGridsError
-from .types import Cell, CellKind, Grid, IrregularGrid, LetterGrid, Point, RectangularGrid
+from .types import (
+    Cell,
+    CellKind,
+    Direction,
+    Grid,
+    IrregularGrid,
+    LetterGrid,
+    Point,
+    RectangularGrid,
+)
 
 __version__ = "0.1.0a"
 
@@ -21,6 +30,7 @@ __all__ = [
     "IrregularGrid",
     "Cell",
     "CellKind",
+    "Direction",
     "Point",
     "LetterGrid",
     "GridDetectionError",

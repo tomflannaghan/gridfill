@@ -9,8 +9,10 @@ from gridfill.types import (
     BoundingBox,
     Cell,
     CellKind,
+    Direction,
     Grid,
     IrregularGrid,
+    Point,
     RectangularGrid,
     grid_from_dict,
 )
@@ -125,6 +127,50 @@ def test_irregular_grid_round_trips_through_dict() -> None:
     loaded = grid_from_dict(data)
     assert isinstance(loaded, IrregularGrid)
     assert loaded == grid
+
+
+def test_rectangular_neighbor_moves_by_row_and_column() -> None:
+    cells = [_cell(CellKind.EMPTY) for _ in range(9)]
+    grid = RectangularGrid(rows=3, cols=3, cells=cells)  # centre is index 4
+    assert grid.neighbor(4, Direction.UP) == 1
+    assert grid.neighbor(4, Direction.DOWN) == 7
+    assert grid.neighbor(4, Direction.LEFT) == 3
+    assert grid.neighbor(4, Direction.RIGHT) == 5
+
+
+def test_rectangular_neighbor_returns_none_off_the_edge() -> None:
+    cells = [_cell(CellKind.EMPTY) for _ in range(9)]
+    grid = RectangularGrid(rows=3, cols=3, cells=cells)
+    assert grid.neighbor(0, Direction.UP) is None
+    assert grid.neighbor(0, Direction.LEFT) is None
+    assert grid.neighbor(8, Direction.DOWN) is None
+    assert grid.neighbor(8, Direction.RIGHT) is None
+
+
+def _square(cx: float, cy: float, half: float = 0.05) -> list[Point]:
+    return [
+        (cx - half, cy - half),
+        (cx + half, cy - half),
+        (cx + half, cy + half),
+        (cx - half, cy + half),
+    ]
+
+
+def test_irregular_neighbor_is_spatial() -> None:
+    # A 2x2 block of cells addressed purely by where they sit in space.
+    cells = [
+        Cell(polygon=_square(0.25, 0.25)),  # 0: top-left
+        Cell(polygon=_square(0.75, 0.25)),  # 1: top-right
+        Cell(polygon=_square(0.25, 0.75)),  # 2: bottom-left
+        Cell(polygon=_square(0.75, 0.75)),  # 3: bottom-right
+    ]
+    grid = IrregularGrid(cells=cells)
+    assert grid.neighbor(0, Direction.RIGHT) == 1
+    assert grid.neighbor(0, Direction.DOWN) == 2
+    assert grid.neighbor(0, Direction.UP) is None
+    assert grid.neighbor(0, Direction.LEFT) is None
+    assert grid.neighbor(3, Direction.UP) == 1
+    assert grid.neighbor(3, Direction.LEFT) == 2
 
 
 def test_grid_from_dict_unknown_type_raises() -> None:

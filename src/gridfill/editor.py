@@ -16,19 +16,26 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
-from .detection import detect_rectangular_grids
+from .detection import detect_grids
 from .document import CWD_EXTENSION, load_document, save_document
 from .fonts import FontT, _best_grid, fit_font_size, fit_font_size_multi, font_loader
 from .geometry import (
     bounding_rect,
     inset_quad,
     point_in_polygon,
+    polygon_size,
     polygon_to_pixels,
-    quad_size,
 )
 from .io import ImageSource, load_image, save_image
 from .preprocess import binarize, to_grayscale
-from .types import Cell, CellKind, RectangularGrid
+from .types import Cell, CellKind, Direction, Grid
+
+_KEYSYM_TO_DIRECTION = {
+    "Up": Direction.UP,
+    "Down": Direction.DOWN,
+    "Left": Direction.LEFT,
+    "Right": Direction.RIGHT,
+}
 
 _SELECTION_BGR = (255, 180, 0)
 _DEFAULT_HIGHLIGHT_COLOR_BGR = (0, 255, 255)
@@ -65,7 +72,7 @@ class _GridState:
     every keystroke and must stay cheap).
     """
 
-    grid: RectangularGrid
+    grid: Grid
     single_font: ImageFont.FreeTypeFont
     ref_cell_size: tuple[int, int]
     display_single_font: ImageFont.FreeTypeFont
@@ -94,7 +101,7 @@ def _default_save_name(input_path: _SavePath, extension: str) -> str | None:
 
 def _load_source(
     source: ImageSource | None,
-) -> tuple[np.ndarray, list[RectangularGrid], _SavePath, list[tuple[float, float, str]]]:
+) -> tuple[np.ndarray, list[Grid], _SavePath, list[tuple[float, float, str]]]:
     """Resolve *source* into ``(image, grids, save_path, annotations)``.
 
     *source* may be ``None`` (start blank), an already-loaded image array, an
@@ -108,35 +115,29 @@ def _load_source(
     if isinstance(source, np.ndarray):
         image = source.copy()
         binary = binarize(to_grayscale(image))
-        return image, detect_rectangular_grids(binary), None, []
+        return image, detect_grids(binary), None, []
 
     if os.fspath(source).endswith(CWD_EXTENSION):
         document = load_document(source)
-        for grid in document.grids:
-            if not isinstance(grid, RectangularGrid):
-                raise NotImplementedError(
-                    f"Editor does not yet support grid type {type(grid).__name__!r}"
-                )
-        grids = cast(list[RectangularGrid], document.grids)
-        return document.image, grids, source, document.annotations
+        return document.image, document.grids, source, document.annotations
 
     image = load_image(source).copy()
     binary = binarize(to_grayscale(image))
-    return image, detect_rectangular_grids(binary), None, []
+    return image, detect_grids(binary), None, []
 
 
 def _fit_font(
-    grid: RectangularGrid,
+    grid: Grid,
     image_size: tuple[int, int],
     loader: Callable[[int], FontT],
 ) -> tuple[ImageFont.FreeTypeFont, tuple[int, int]]:
-    sample_px = polygon_to_pixels(grid.cell(0, 0).polygon, image_size)
-    ref_w, ref_h = quad_size(sample_px)
+    sample_px = polygon_to_pixels(grid.cells[0].polygon, image_size)
+    ref_w, ref_h = polygon_size(sample_px)
     return loader(fit_font_size(loader, ref_w, ref_h)), (ref_w, ref_h)
 
 
 def _make_grid_states(
-    grids: list[RectangularGrid],
+    grids: list[Grid],
     src_size: tuple[int, int],
     loader: Callable[[int], FontT],
 ) -> list[_GridState]:
@@ -193,7 +194,7 @@ def edit_grid(
     out_path: str | os.PathLike[str] | None = None,
     font_path: str | os.PathLike[str] | None = None,
     color: tuple[int, int, int] = (0, 0, 0),
-) -> list[RectangularGrid]:
+) -> list[Grid]:
     """Open an interactive editor for all grids found in *source*.
 
     *source* is either an image (a path, an already-loaded array, or a PDF --
@@ -205,7 +206,8 @@ def edit_grid(
 
     Each grid gets its own editing state. Click a cell to select its grid.
 
-    Returns a list of edited :class:`RectangularGrid` objects (one per grid).
+    Returns a list of edited :class:`Grid` objects (one per grid); each is a
+    :class:`RectangularGrid` or :class:`IrregularGrid` depending on what was detected.
     """
     image, grids, save_path, annotations = _load_source(source)
     loader = font_loader(font_path)
@@ -249,7 +251,7 @@ class _GridEditor(tk.Tk):
     def __init__(
         self,
         image: np.ndarray,
-        grids: list[RectangularGrid],
+        grids: list[Grid],
         loader: Callable[[int], FontT],
         color: tuple[int, int, int],
         out_path: str | os.PathLike[str] | None,
@@ -296,7 +298,7 @@ class _GridEditor(tk.Tk):
     def _load_state(
         self,
         image: np.ndarray,
-        grids: list[RectangularGrid],
+        grids: list[Grid],
         save_path: str | os.PathLike[str] | None,
         input_path: str | os.PathLike[str] | None,
         annotations: list[tuple[float, float, str]] | None,
@@ -323,7 +325,8 @@ class _GridEditor(tk.Tk):
         self._grid_states = _make_grid_states(grids, self._src_size, self._loader)
 
         self._active_grid_index: int | None = 0 if len(grids) == 1 else None
-        self._selected: tuple[int, int] | None = None
+        # Flat index into the active grid's ``cells`` list, or None.
+        self._selected: int | None = None
         self._multi_entry = False
         self._annotations: list[tuple[float, float, str]] = list(annotations or [])
 
@@ -395,13 +398,12 @@ class _GridEditor(tk.Tk):
             return None
         return self._grid_states[self._active_grid_index]
 
-    def _find_click_target(self, event_x: float, event_y: float) -> tuple[int, int, int] | None:
-        """Return ``(grid_index, row, col)`` or ``None``."""
+    def _find_click_target(self, event_x: float, event_y: float) -> tuple[int, int] | None:
+        """Return ``(grid_index, cell_index)`` or ``None``."""
         for gi, gs in enumerate(self._grid_states):
             idx = click_to_cell(event_x, event_y, self._scale, self._src_size, gs.grid.cells)
             if idx is not None:
-                r, c = divmod(idx, gs.grid.cols)
-                return (gi, r, c)
+                return (gi, idx)
         return None
 
     # ------------------------------------------------------------------
@@ -455,8 +457,7 @@ class _GridEditor(tk.Tk):
         gs = self._active
         if gs is None or self._selected is None:
             return
-        r, c = self._selected
-        cell = gs.grid.cell(r, c)
+        cell = gs.grid.cells[self._selected]
         cell.letter = None
         cell.kind = CellKind.EMPTY
         self._render_and_display()
@@ -551,7 +552,7 @@ class _GridEditor(tk.Tk):
         if not text:
             return
         polygon_px = polygon_to_pixels(cell.polygon, image_size)
-        cell_w, cell_h = quad_size(polygon_px)
+        cell_w, cell_h = polygon_size(polygon_px)
         cx, cy = polygon_px.mean(axis=0)
 
         x0, y0, x1, y1 = bounding_rect(polygon_px, image_size, margin=1)
@@ -627,8 +628,7 @@ class _GridEditor(tk.Tk):
         # Cell selection highlight
         if not for_save and self._selected is not None and self._active_grid_index is not None:
             gs = self._grid_states[self._active_grid_index]
-            r, c = self._selected
-            cell = gs.grid.cell(r, c)
+            cell = gs.grid.cells[self._selected]
             poly_px = polygon_to_pixels(cell.polygon, image_size).astype(np.int32)
             thickness = 3 if self._multi_entry else 2
             cv2.polylines(result, [poly_px], True, _SELECTION_BGR, thickness)
@@ -669,8 +669,8 @@ class _GridEditor(tk.Tk):
     def _on_click(self, event: tk.Event[tk.Canvas]) -> None:
         target = self._find_click_target(event.x, event.y)
         if target is not None:
-            gi, r, c = target
-            cell = self._grid_states[gi].grid.cell(r, c)
+            gi, idx = target
+            cell = self._grid_states[gi].grid.cells[idx]
             if cell.kind is CellKind.BLOCK:
                 self._active_grid_index = gi
                 self._selected = None
@@ -678,7 +678,7 @@ class _GridEditor(tk.Tk):
                 self._render_and_display()
                 return
             self._active_grid_index = gi
-            self._selected = (r, c)
+            self._selected = idx
         else:
             self._selected = None
         self._multi_entry = False
@@ -689,12 +689,12 @@ class _GridEditor(tk.Tk):
         if target is None:
             self._add_annotation(event.x, event.y)
             return
-        gi, r, c = target
-        cell = self._grid_states[gi].grid.cell(r, c)
+        gi, idx = target
+        cell = self._grid_states[gi].grid.cells[idx]
         if cell.kind is CellKind.BLOCK:
             return
         self._active_grid_index = gi
-        self._selected = (r, c)
+        self._selected = idx
         self._multi_entry = True
         self._render_and_display()
 
@@ -739,15 +739,15 @@ class _GridEditor(tk.Tk):
         if gs is None or self._selected is None:
             return
 
-        r, c = self._selected
+        index = self._selected
 
-        if event.keysym in ("Up", "Down", "Left", "Right"):
+        if event.keysym in _KEYSYM_TO_DIRECTION:
             self._multi_entry = False
             self._move_selection(event.keysym)
             return
 
         if event.keysym == "BackSpace":
-            cell = gs.grid.cell(r, c)
+            cell = gs.grid.cells[index]
             if self._multi_entry and cell.letter and len(cell.letter) > 1:
                 cell.letter = cell.letter[:-1]
             elif cell.kind is CellKind.LETTER:
@@ -765,7 +765,7 @@ class _GridEditor(tk.Tk):
 
         ch = event.char.upper()
         if ch and ch.isalnum() and len(ch) == 1:
-            cell = gs.grid.cell(r, c)
+            cell = gs.grid.cells[index]
             if self._multi_entry:
                 cell.letter = (cell.letter or "") + ch
             else:
@@ -775,16 +775,17 @@ class _GridEditor(tk.Tk):
                 self._advance_selection()
             self._render_and_display()
 
-    def _move_selection(self, direction: str) -> None:
+    def _move_selection(self, keysym: str) -> None:
+        """Move the selection to the cell adjacent in the arrow-key direction.
+
+        The geometry of "adjacent" is the grid's own concern (see
+        :meth:`Grid.neighbor`), so this works for any grid shape."""
         gs = self._active
         if gs is None or self._selected is None:
             return
-        r, c = self._selected
-        dr = {"Up": -1, "Down": 1}.get(direction, 0)
-        dc = {"Left": -1, "Right": 1}.get(direction, 0)
-        nr, nc = r + dr, c + dc
-        if 0 <= nr < gs.grid.rows and 0 <= nc < gs.grid.cols:
-            self._selected = (nr, nc)
+        target = gs.grid.neighbor(self._selected, _KEYSYM_TO_DIRECTION[keysym])
+        if target is not None:
+            self._selected = target
             self._render_and_display()
 
     def _advance_selection(self) -> None:
@@ -793,17 +794,12 @@ class _GridEditor(tk.Tk):
         gs = self._active
         if gs is None or self._selected is None:
             return
-        r, c = self._selected
-        rows, cols = gs.grid.rows, gs.grid.cols
-        while True:
-            c += 1
-            if c >= cols:
-                c = 0
-                r += 1
-            if r >= rows:
-                return
-            if gs.grid.cell(r, c).kind is not CellKind.BLOCK:
-                self._selected = (r, c)
+        cells = gs.grid.cells
+        index = self._selected
+        while index + 1 < len(cells):
+            index += 1
+            if cells[index].kind is not CellKind.BLOCK:
+                self._selected = index
                 return
 
     def _retreat_selection(self) -> None:
@@ -812,17 +808,12 @@ class _GridEditor(tk.Tk):
         gs = self._active
         if gs is None or self._selected is None:
             return
-        r, c = self._selected
-        cols = gs.grid.cols
-        while True:
-            c -= 1
-            if c < 0:
-                c = cols - 1
-                r -= 1
-            if r < 0:
-                return
-            if gs.grid.cell(r, c).kind is not CellKind.BLOCK:
-                self._selected = (r, c)
+        cells = gs.grid.cells
+        index = self._selected
+        while index > 0:
+            index -= 1
+            if cells[index].kind is not CellKind.BLOCK:
+                self._selected = index
                 return
 
     # ------------------------------------------------------------------
@@ -850,8 +841,7 @@ class _GridEditor(tk.Tk):
         gs = self._active
         if gs is None or self._selected is None:
             return
-        r, c = self._selected
-        cell = gs.grid.cell(r, c)
+        cell = gs.grid.cells[self._selected]
         if cell.kind is CellKind.BLOCK:
             return
         if cell.background == self._highlight_color:
