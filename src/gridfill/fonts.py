@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.resources
-import math
 import os
 from collections.abc import Callable
 
@@ -76,32 +75,59 @@ def fit_font_size(
     return size
 
 
-def best_grid(n: int, cell_width: int, cell_height: int) -> tuple[int, int]:
-    """Choose rows x cols to arrange *n* characters with the best aspect ratio."""
-    best: tuple[int, int] = (n, 1)
-    best_waste = float("inf")
-    for ncols in range(1, n + 1):
-        nrows = math.ceil(n / ncols)
-        char_w = cell_width / ncols
-        char_h = cell_height / nrows
-        aspect = min(char_w, char_h) / max(char_w, char_h)
-        waste = nrows * ncols - n
-        score = -aspect + waste * 0.1
-        if score < best_waste:
-            best_waste = score
-            best = (nrows, ncols)
-    return best
+def split_lines(text: str, nrows: int) -> list[str]:
+    """Split *text* into *nrows* contiguous lines, as evenly as possible.
+
+    Order is preserved and earlier lines take the surplus, so a 5-character
+    string over 2 rows becomes ``["ABC", "DE"]``.
+    """
+    base, extra = divmod(len(text), nrows)
+    lines: list[str] = []
+    i = 0
+    for r in range(nrows):
+        length = base + (1 if r < extra else 0)
+        lines.append(text[i : i + length])
+        i += length
+    return lines
 
 
-def fit_font_size_multi(
+def fit_multiline(
     loader: Callable[[int], FontT],
     cell_width: int,
     cell_height: int,
-    nrows: int,
-    ncols: int,
-    margin: float = 0.85,
-) -> int:
-    """Pick a font size so characters arranged in *nrows* x *ncols* fit the cell."""
-    slot_w = cell_width / ncols
-    slot_h = cell_height / nrows
-    return fit_font_size(loader, int(slot_w), int(slot_h), max_width_ratio=margin)
+    text: str,
+    height_ratio: float = 0.5,
+    margin: float = 0.78,
+) -> tuple[list[str], int]:
+    """Lay *text* out over one or more lines of adjacent characters.
+
+    Each line's characters sit side by side (no per-glyph slots). Every row
+    count is tried and the one yielding the largest font size wins, where the
+    size is bounded by the cell height (all lines must fit) and the widest
+    line's ink width (it must fit ``margin`` of the cell width). Ties favour
+    fewer lines, so text is only wrapped when doing so genuinely permits larger
+    glyphs. Returns the chosen lines and font size.
+    """
+    probe = 100
+    font = loader(probe)
+    _, cap_top, _, cap_bottom = font.getbbox("H")
+    cap_h = max(1, cap_bottom - cap_top)
+
+    best_lines = [text]
+    best_size = 0
+    for nrows in range(1, len(text) + 1):
+        lines = split_lines(text, nrows)
+        size_h = probe * (height_ratio * cell_height / nrows) / cap_h
+        widest = max(_ink_width(font, line) for line in lines)
+        size_w = probe * (margin * cell_width) / widest
+        size = int(min(size_h, size_w))
+        if size > best_size:
+            best_size = size
+            best_lines = lines
+    return best_lines, max(8, best_size)
+
+
+def _ink_width(font: FontT, text: str) -> int:
+    """Pixel width of *text*'s ink bounding box in *font* (min 1)."""
+    left, _, right, _ = font.getbbox(text)
+    return max(1, int(right - left))

@@ -67,8 +67,10 @@ class _GridState:
     ref_cell_size: int
     display_single_font: ImageFont.FreeTypeFont
     display_ref_cell_size: int
-    multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont] = field(default_factory=dict)
-    display_multi_font_cache: dict[tuple[int, int], ImageFont.FreeTypeFont] = field(
+    multi_font_cache: dict[str, tuple[list[str], ImageFont.FreeTypeFont]] = field(
+        default_factory=dict
+    )
+    display_multi_font_cache: dict[str, tuple[list[str], ImageFont.FreeTypeFont]] = field(
         default_factory=dict
     )
 

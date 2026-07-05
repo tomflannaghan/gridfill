@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .fonts import FontT, best_grid, fit_font_size_multi
+from .fonts import FontT, fit_multiline
 from .geometry import bounding_rect, incircle, inset_quad, polygon_to_pixels
 from .types import Cell, CellKind, Grid
 
@@ -24,6 +24,7 @@ _ACTIVE_GRID_BGR = (0, 180, 0)
 _WHITE_DISTANCE_THRESHOLD = 30
 _CELL_FILL_INSET_FRAC = 0.06
 _BLANK_ICON_SIZE_FRAC = 0.4  # fraction of the shorter side the blank-state icon spans
+_MULTI_TEXT_FILL = 0.85  # fraction of cell height a multi-line letter stack may span
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,7 @@ class GridLayer:
     grid: Grid
     single_font: FontT
     ref_cell_size: int
-    multi_font_cache: dict[tuple[int, int], FontT]
+    multi_font_cache: dict[str, tuple[list[str], FontT]]
 
 
 def _cell_highlight_color(cell: Cell) -> tuple[int, int, int] | None:
@@ -172,14 +173,14 @@ class GridRenderer:
         image_size: tuple[int, int],
         single_font: FontT,
         ref_cell_size: int,
-        multi_font_cache: dict[tuple[int, int], FontT],
+        multi_font_cache: dict[str, tuple[list[str], FontT]],
     ) -> None:
         text = (cell.letter or "").upper()
         if not text:
             return
         polygon_px = polygon_to_pixels(cell.polygon, image_size)
         cx, cy, diameter = incircle(polygon_px)
-        cell_w = cell_h = diameter
+        cell_h = diameter
 
         x0, y0, x1, y1 = bounding_rect(polygon_px, image_size, margin=1)
         if x1 <= x0 or y1 <= y0:
@@ -200,20 +201,17 @@ class GridRenderer:
                 anchor="mm",
             )
         else:
-            ref = ref_cell_size
-            grid_shape = best_grid(len(text), ref, ref)
-            if grid_shape not in multi_font_cache:
-                size = fit_font_size_multi(self._loader, ref, ref, grid_shape[0], grid_shape[1])
-                multi_font_cache[grid_shape] = self._loader(size)
-            font = multi_font_cache[grid_shape]
-            nrows, ncols = grid_shape
-            slot_w, slot_h = cell_w / ncols, cell_h / nrows
-            top_left_x, top_left_y = local_cx - cell_w / 2, local_cy - cell_h / 2
-            for i, ch in enumerate(text):
-                ri, ci = divmod(i, ncols)
+            if text not in multi_font_cache:
+                ref = ref_cell_size
+                lines, size = fit_multiline(self._loader, ref, ref, text)
+                multi_font_cache[text] = (lines, self._loader(size))
+            lines, font = multi_font_cache[text]
+            band_h = cell_h / len(lines)
+            top_y = local_cy - cell_h / 2
+            for i, line in enumerate(lines):
                 draw.text(
-                    (top_left_x + (ci + 0.5) * slot_w, top_left_y + (ri + 0.5) * slot_h),
-                    ch,
+                    (local_cx, top_y + (i + 0.5) * band_h),
+                    line,
                     font=font,
                     fill=rgb_color,
                     anchor="mm",
