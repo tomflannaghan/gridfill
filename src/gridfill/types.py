@@ -191,5 +191,57 @@ class RectangularGrid(Grid):
         return out
 
 
+def _convex_hull(points: list[Point]) -> list[Point]:
+    """Counter-clockwise convex hull of *points* (Andrew's monotone chain).
+
+    Kept dependency-free (no cv2) so :mod:`types` stays free of image libraries.
+    """
+    pts = sorted(set(points))
+    if len(pts) <= 2:
+        return pts
+
+    def cross(o: Point, a: Point, b: Point) -> float:
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower: list[Point] = []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper: list[Point] = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
+@register_grid_type("irregular")
+@dataclass
+class IrregularGrid(Grid):
+    """A grid of arbitrarily-shaped cells forming a continuous lattice.
+
+    Unlike :class:`RectangularGrid` there is no row/column structure: cells can
+    be rhombi, hexagons, curved wedges, etc. ``cells`` is a flat list ordered
+    top-to-bottom then left-to-right by centroid. Each :class:`Cell` carries its
+    own polygon, so the geometry lives entirely in the cells.
+    """
+
+    cells: list[Cell]
+
+    def bounding_polygon(self) -> list[Point]:
+        return _convex_hull([pt for cell in self.cells for pt in cell.polygon])
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "irregular",
+            "cells": [cell.to_dict() for cell in self.cells],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> IrregularGrid:
+        return cls(cells=[Cell.from_dict(c) for c in data["cells"]])
+
+
 # Public alias for the simple letter-array format (see Grid.to_letters).
 LetterGrid = list[list[str | None]]

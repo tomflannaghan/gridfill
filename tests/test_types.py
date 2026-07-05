@@ -10,6 +10,7 @@ from gridfill.types import (
     Cell,
     CellKind,
     Grid,
+    IrregularGrid,
     RectangularGrid,
     grid_from_dict,
 )
@@ -96,6 +97,33 @@ def test_rectangular_grid_round_trips_through_dict() -> None:
 
     loaded = grid_from_dict(data)
     assert isinstance(loaded, RectangularGrid)
+    assert loaded == grid
+
+
+def test_irregular_grid_bounding_polygon_is_convex_hull() -> None:
+    # Four small cells with a point poking outside their common bounding box; the
+    # hull should wrap the outer extent, ignoring interior points.
+    cells = [
+        Cell(polygon=[(0.0, 0.0), (0.2, 0.0), (0.1, 0.2)]),
+        Cell(polygon=[(1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]),
+        Cell(polygon=[(0.4, 0.4), (0.5, 0.4), (0.5, 0.5)]),
+    ]
+    hull = IrregularGrid(cells=cells).bounding_polygon()
+    assert set(hull) == {(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)}
+
+
+def test_irregular_grid_round_trips_through_dict() -> None:
+    cells = [
+        Cell(polygon=[(0.0, 0.0), (0.1, 0.0), (0.1, 0.1), (0.0, 0.1)], kind=CellKind.EMPTY),
+        Cell(polygon=[(0.2, 0.0), (0.3, 0.05), (0.25, 0.15)], kind=CellKind.LETTER, letter="X"),
+    ]
+    grid = IrregularGrid(cells=cells)
+
+    data = grid.to_dict()
+    assert data["type"] == "irregular"
+
+    loaded = grid_from_dict(data)
+    assert isinstance(loaded, IrregularGrid)
     assert loaded == grid
 
 

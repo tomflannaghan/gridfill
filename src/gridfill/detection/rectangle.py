@@ -11,9 +11,9 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 
-from .errors import GridDetectionError, GridSegmentationError, MultipleGridsError
-from .segmentation import infer_cell_boxes
-from .types import BoundingBox, Cell, Point, RectangularGrid
+from ..errors import GridDetectionError, GridSegmentationError, MultipleGridsError
+from ..segmentation import infer_cell_boxes
+from ..types import BoundingBox, Cell, Point, RectangularGrid
 
 
 @dataclass
