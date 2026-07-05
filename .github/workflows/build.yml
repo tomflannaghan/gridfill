@@ -12,12 +12,21 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # PyInstaller needs to link against a Tcl/Tk that's actually consistent
+    # with the running Python -- uv's managed (python-build-standalone) builds
+    # bundle a Tcl/Tk that doesn't survive freezing on Linux (undefined symbol
+    # `TclBN_mp_to_ubin` at runtime). The runner's own Python doesn't have
+    # this problem, so use that instead of letting uv download one.
+    env:
+      UV_NO_MANAGED_PYTHON: "1"
     steps:
       - uses: actions/checkout@v4
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
 
       - run: uv sync --extra build
 

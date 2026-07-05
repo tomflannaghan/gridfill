@@ -20,10 +20,18 @@ Prebuilt Windows and Linux executables are attached to each
 To build one yourself:
 
 ```bash
-uv sync --extra build
-uv run pyinstaller --noconfirm --clean packaging/gridfill.spec
+UV_NO_MANAGED_PYTHON=1 uv sync --extra build
+UV_NO_MANAGED_PYTHON=1 uv run pyinstaller --noconfirm --clean packaging/gridfill.spec
 # -> dist/gridfill(.exe)
 ```
+
+`UV_NO_MANAGED_PYTHON=1` forces uv to build against your system's Python
+rather than downloading its own. On Linux this matters: uv's managed
+(python-build-standalone) builds bundle a Tcl/Tk that PyInstaller can't
+freeze cleanly, producing an executable that crashes on startup with
+`undefined symbol: TclBN_mp_to_ubin`. Your system Python doesn't have this
+problem, so long as it has tkinter available (`python3 -c "import tkinter"`;
+install your distro's `python3-tkinter`/`python3-tk` package if that fails).
 
 PyInstaller doesn't cross-compile, so this produces an executable for
 whichever OS you run it on; the release workflow builds both by running on
