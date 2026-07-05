@@ -29,7 +29,12 @@ _FORMAT_VERSION = 1
 
 @dataclass
 class Document:
-    """The full editable state of a session: source image, grids, annotations."""
+    """The full editable state of a session: source image, grids, annotations.
+
+    Annotations are ``(x, y, text)`` with ``x``/``y`` normalized to ``[0, 1]``
+    as fractions of the source image width/height -- the same coordinate system
+    as :class:`~gridfill.types.Cell` polygons.
+    """
 
     image: np.ndarray
     grids: list[Grid]

@@ -633,19 +633,19 @@ class _GridEditor(tk.Tk):
             thickness = 3 if self._multi_entry else 2
             cv2.polylines(result, [poly_px], True, _SELECTION_BGR, thickness)
 
-        # Text annotations -- stored in full-source pixel coordinates, so
-        # scale them down to display space when not rendering for export.
+        # Text annotations -- stored in normalized [0, 1] source coordinates
+        # (like cell polygons), so scale them to the current image space.
         if self._annotations:
             gs = self._active or self._grid_states[0]
             font = gs.single_font if for_save else gs.display_single_font
-            coord_scale = 1.0 if for_save else self._scale
+            img_w, img_h = image_size
             pil_img = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
             draw = ImageDraw.Draw(pil_img)
             b, g, r = self._color
             rgb_color = (r, g, b)
             for ax, ay, text in self._annotations:
                 draw.text(
-                    (ax * coord_scale, ay * coord_scale),
+                    (ax * img_w, ay * img_h),
                     text,
                     font=font,
                     fill=rgb_color,
@@ -824,9 +824,10 @@ class _GridEditor(tk.Tk):
         text = tkinter.simpledialog.askstring("Add Text", "Enter text:", parent=self)
         if not text:
             return
-        src_x = display_x / self._scale
-        src_y = display_y / self._scale
-        self._annotations.append((src_x, src_y, text))
+        src_w, src_h = self._src_size
+        norm_x = display_x / self._scale / src_w
+        norm_y = display_y / self._scale / src_h
+        self._annotations.append((norm_x, norm_y, text))
         self._render_and_display()
 
     def _clear_annotations(self) -> None:

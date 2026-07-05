@@ -34,7 +34,7 @@ def _sample_grid() -> RectangularGrid:
 def test_document_round_trip(tmp_path: Path) -> None:
     image = _sample_image()
     grid = _sample_grid()
-    annotations = [(1.5, 2.5, "hello")]
+    annotations = [(0.15, 0.25, "hello")]
     path = tmp_path / "doc.cwd"
 
     save_document(path, image, [grid], annotations)

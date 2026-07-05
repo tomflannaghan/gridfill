@@ -26,3 +26,10 @@ ruff check src tests                      # lint
 ruff format src tests                     # format (run before committing)
 mypy src                                  # type check (strict)
 ```
+
+## Conventions
+
+Coordinates that get persisted to a `.cwd` document are always **normalized to
+`[0, 1]`** as fractions of the source image width/height — never raw pixels.
+This applies to both `Cell.polygon` vertices and text annotation `(x, y)`
+positions, so a document stays valid independent of the image's resolution.
