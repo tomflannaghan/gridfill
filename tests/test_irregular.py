@@ -12,17 +12,21 @@ from pathlib import Path
 
 import cv2
 
-from gridfill.detection import detect_irregular_grids
+from gridfill.detection import detect_grids, detect_irregular_grids
 from gridfill.preprocess import binarize, to_grayscale
-from gridfill.types import IrregularGrid
+from gridfill.types import Grid, IrregularGrid, RectangularGrid
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def _detect(name: str) -> list[IrregularGrid]:
+def _binary(name: str):
     image = cv2.imread(str(FIXTURES / name))
     assert image is not None, f"missing fixture {name}"
-    return detect_irregular_grids(binarize(to_grayscale(image)))
+    return binarize(to_grayscale(image))
+
+
+def _detect(name: str) -> list[IrregularGrid]:
+    return detect_irregular_grids(_binary(name))
 
 
 def _avg_vertices(grid: IrregularGrid) -> float:
@@ -63,6 +67,48 @@ def test_multigrid_includes_honeycomb() -> None:
     hex_grids = [g for g in grids if _avg_vertices(g) >= 6]
     assert len(hex_grids) == 1
     assert 125 <= len(hex_grids[0].cells) <= 165
+
+
+def _bbox(grid: Grid) -> tuple[float, float, float, float]:
+    points = grid.bounding_polygon()
+    xs = [x for x, _ in points]
+    ys = [y for _, y in points]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _boxes_overlap(a: Grid, b: Grid) -> float:
+    ax0, ay0, ax1, ay1 = _bbox(a)
+    bx0, by0, bx1, by1 = _bbox(b)
+    iw = max(0.0, min(ax1, bx1) - max(ax0, bx0))
+    ih = max(0.0, min(ay1, by1) - max(ay0, by0))
+    return iw * ih
+
+
+def test_combined_detect_keeps_rectangular_and_nonoverlapping_irregular() -> None:
+    """On the mixed page, detect_grids returns the rectangular grids plus the one
+    honeycomb that has no rectangular counterpart -- the rectangular grids are not
+    also returned as duplicate irregular grids."""
+    grids = detect_grids(_binary("irregular_multigrid.png"))
+    assert any(isinstance(g, RectangularGrid) for g in grids)
+    irregular = [g for g in grids if isinstance(g, IrregularGrid)]
+    assert len(irregular) == 1  # just the honeycomb hex
+
+    # No two returned grids cover the same area (dedup worked).
+    for i, a in enumerate(grids):
+        for b in grids[i + 1 :]:
+            assert _boxes_overlap(a, b) == 0.0
+
+
+def test_combined_detect_on_purely_rectangular_page_has_no_irregular_duplicates() -> None:
+    grids = detect_grids(_binary("multigrid.png"))
+    assert all(isinstance(g, RectangularGrid) for g in grids)
+    assert len(grids) == 6
+
+
+def test_combined_detect_returns_irregular_when_no_rectangular_grid() -> None:
+    grids = detect_grids(_binary("irregular_hex.png"))
+    assert len(grids) == 1
+    assert isinstance(grids[0], IrregularGrid)
 
 
 def test_every_cell_has_a_polygon() -> None:

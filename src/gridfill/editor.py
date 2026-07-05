@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 
-from .detection import detect_grids
+from .detection import detect_rectangular_grids
 from .document import CWD_EXTENSION, load_document, save_document
 from .fonts import FontT, _best_grid, fit_font_size, fit_font_size_multi, font_loader
 from .geometry import (
@@ -108,7 +108,7 @@ def _load_source(
     if isinstance(source, np.ndarray):
         image = source.copy()
         binary = binarize(to_grayscale(image))
-        return image, detect_grids(binary), None, []
+        return image, detect_rectangular_grids(binary), None, []
 
     if os.fspath(source).endswith(CWD_EXTENSION):
         document = load_document(source)
@@ -122,7 +122,7 @@ def _load_source(
 
     image = load_image(source).copy()
     binary = binarize(to_grayscale(image))
-    return image, detect_grids(binary), None, []
+    return image, detect_rectangular_grids(binary), None, []
 
 
 def _fit_font(

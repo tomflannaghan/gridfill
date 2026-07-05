@@ -219,8 +219,8 @@ def _resolve_candidates(
     ]
 
 
-def detect_grids(binary: np.ndarray) -> list[RectangularGrid]:
-    """Detect all crossword grids in the image, sorted in reading order.
+def detect_rectangular_grids(binary: np.ndarray) -> list[RectangularGrid]:
+    """Detect all rectangular crossword grids in the image, sorted in reading order.
 
     Candidate quads that don't resolve into a row/column lattice at all (too
     few lines, a degenerate size) are skipped outright. Quads that do, but
@@ -274,7 +274,7 @@ def detect_grid(binary: np.ndarray, grid_index: int | None = None) -> Rectangula
     *grid_index* is given, or :class:`GridSegmentationError` if a lattice is
     found but its cells can't be resolved into rows/columns.
     """
-    grids = detect_grids(binary)
+    grids = detect_rectangular_grids(binary)
 
     if grid_index is None:
         if len(grids) == 1:
