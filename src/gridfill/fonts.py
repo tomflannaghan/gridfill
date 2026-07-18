@@ -91,21 +91,27 @@ def split_lines(text: str, nrows: int) -> list[str]:
     return lines
 
 
+# Vertical pitch between stacked lines, as a multiple of cap height. Kept close
+# to 1 so the rows sit tight together; the whole stack is centred in the cell.
+MULTILINE_SPACING = 1.15
+
+
 def fit_multiline(
     loader: Callable[[int], FontT],
     cell_width: int,
     cell_height: int,
     text: str,
-    height_ratio: float = 0.5,
+    spacing: float = MULTILINE_SPACING,
     margin: float = 0.78,
 ) -> tuple[list[str], int]:
     """Lay *text* out over one or more lines of adjacent characters.
 
-    Each line's characters sit side by side (no per-glyph slots). Every row
-    count is tried and the one yielding the largest font size wins, where the
-    size is bounded by the cell height (all lines must fit) and the widest
-    line's ink width (it must fit ``margin`` of the cell width). Ties favour
-    fewer lines, so text is only wrapped when doing so genuinely permits larger
+    Each line's characters sit side by side (no per-glyph slots) and the lines
+    stack with a pitch of ``spacing`` cap heights, so they sit close together.
+    Every row count is tried and the one yielding the largest font size wins,
+    bounded by the cell height (the whole stack must fit) and the widest line's
+    ink width (it must fit ``margin`` of the cell width). Ties favour fewer
+    lines, so text is only wrapped when doing so genuinely permits larger
     glyphs. Returns the chosen lines and font size.
     """
     probe = 100
@@ -117,7 +123,10 @@ def fit_multiline(
     best_size = 0
     for nrows in range(1, len(text) + 1):
         lines = split_lines(text, nrows)
-        size_h = probe * (height_ratio * cell_height / nrows) / cap_h
+        # Height of the packed stack, in cap heights: nrows lines pitched
+        # ``spacing`` apart span (nrows - 1) * spacing + 1 cap heights.
+        stack_caps = (nrows - 1) * spacing + 1
+        size_h = probe * (cell_height / stack_caps) / cap_h
         widest = max(_ink_width(font, line) for line in lines)
         size_w = probe * (margin * cell_width) / widest
         size = int(min(size_h, size_w))

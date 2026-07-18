@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .fonts import FontT, fit_multiline
+from .fonts import MULTILINE_SPACING, FontT, fit_multiline
 from .geometry import bounding_rect, incircle, inset_quad, polygon_to_pixels
 from .types import Cell, CellKind, Grid
 
@@ -24,7 +24,7 @@ _ACTIVE_GRID_BGR = (0, 180, 0)
 _WHITE_DISTANCE_THRESHOLD = 30
 _CELL_FILL_INSET_FRAC = 0.06
 _BLANK_ICON_SIZE_FRAC = 0.4  # fraction of the shorter side the blank-state icon spans
-_MULTI_TEXT_FILL = 0.85  # fraction of cell height a multi-line letter stack may span
+_MULTI_TEXT_FILL = 0.72  # fraction of cell height a multi-line letter stack may span
 
 
 @dataclass(frozen=True)
@@ -179,8 +179,7 @@ class GridRenderer:
         if not text:
             return
         polygon_px = polygon_to_pixels(cell.polygon, image_size)
-        cx, cy, diameter = incircle(polygon_px)
-        cell_h = diameter
+        cx, cy, _ = incircle(polygon_px)
 
         x0, y0, x1, y1 = bounding_rect(polygon_px, image_size, margin=1)
         if x1 <= x0 or y1 <= y0:
@@ -203,14 +202,16 @@ class GridRenderer:
         else:
             if text not in multi_font_cache:
                 ref = ref_cell_size
-                lines, size = fit_multiline(self._loader, ref, ref, text)
+                lines, size = fit_multiline(self._loader, ref, int(ref * _MULTI_TEXT_FILL), text)
                 multi_font_cache[text] = (lines, self._loader(size))
             lines, font = multi_font_cache[text]
-            band_h = cell_h / len(lines)
-            top_y = local_cy - cell_h / 2
+            # Pack the lines a cap height apart and centre the stack on the cell.
+            _, cap_top, _, cap_bottom = font.getbbox("H")
+            pitch = (cap_bottom - cap_top) * MULTILINE_SPACING
             for i, line in enumerate(lines):
+                offset = (i - (len(lines) - 1) / 2) * pitch
                 draw.text(
-                    (local_cx, top_y + (i + 0.5) * band_h),
+                    (local_cx, local_cy + offset),
                     line,
                     font=font,
                     fill=rgb_color,
