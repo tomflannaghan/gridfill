@@ -1,4 +1,4 @@
-"""Image loading and saving helpers.
+"""Image loading helpers.
 
 Images are represented as BGR ``numpy`` arrays (OpenCV's native layout) throughout
 the library so the CV modules can use them directly.
@@ -45,9 +45,3 @@ def load_image(source: ImageSource) -> np.ndarray:
     if image is None:
         raise FileNotFoundError(f"Could not read image: {path!r}")
     return np.asarray(image)
-
-
-def save_image(path: str | os.PathLike[str], image: np.ndarray) -> None:
-    """Write a BGR ``numpy`` array to disk."""
-    if not cv2.imwrite(os.fspath(path), image):
-        raise OSError(f"Could not write image: {os.fspath(path)!r}")
