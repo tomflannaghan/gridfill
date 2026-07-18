@@ -5,12 +5,14 @@ description: Build the standalone gridfill executable with PyInstaller
 Build the standalone `gridfill` executable following the process documented in
 [DEVELOPMENT.md](../../DEVELOPMENT.md) ("Standalone executable").
 
+All commands run from the `python/` directory (the Python project root).
+
 ## Steps
 
 1. **Sync the build dependencies:**
 
    ```bash
-   uv sync --extra build
+   cd python && uv sync --extra build
    ```
 
 2. **Run PyInstaller against the spec:**
@@ -19,9 +21,9 @@ Build the standalone `gridfill` executable following the process documented in
    uv run pyinstaller --noconfirm --clean packaging/gridfill.spec
    ```
 
-3. **Confirm the output.** The executable lands at `dist/gridfill` (or
-   `dist/gridfill.exe` on Windows). Verify it exists and report its path and
-   size.
+3. **Confirm the output.** The executable lands at `python/dist/gridfill` (or
+   `python/dist/gridfill.exe` on Windows). Verify it exists and report its path
+   and size.
 
 
 ## Notes

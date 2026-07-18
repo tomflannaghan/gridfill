@@ -21,13 +21,13 @@ Cut a release of gridfill at version `$ARGUMENTS`.
 
 3. **Check the version is actually new.** Confirm `v<version>` doesn't already
    exist as a git tag (`git tag -l`) and that the target version differs from
-   the current one in `pyproject.toml`. Stop and ask if it already exists.
+   the current one in `python/pyproject.toml`. Stop and ask if it already exists.
 
 4. **Bump the version in both places it's declared:**
-   - [pyproject.toml](../../pyproject.toml) — the `version = "..."` line under
-     `[project]`.
-   - [src/gridfill/__init__.py](../../src/gridfill/__init__.py) — the
-     `__version__ = "..."` line.
+   - [python/pyproject.toml](../../python/pyproject.toml) — the
+     `version = "..."` line under `[project]`.
+   - [python/src/gridfill/__init__.py](../../python/src/gridfill/__init__.py) —
+     the `__version__ = "..."` line.
 
    Use Edit for both; don't touch anything else in these files.
 

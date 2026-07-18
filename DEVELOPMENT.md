@@ -4,9 +4,13 @@ See [README.md](README.md) for what gridfill is and how to use it. This
 document covers installing from source, the Python API, building the
 standalone executable, and running checks.
 
+The Python project lives in [python/](python/); run all commands below from
+there.
+
 ## Install
 
 ```bash
+cd python
 uv venv
 uv pip install -e ".[dev]"
 ```
@@ -17,12 +21,12 @@ Prebuilt Windows, macOS, and Linux executables are attached to each
 [release](../../releases), built by
 [.github/workflows/build.yml](.github/workflows/build.yml) via PyInstaller.
 
-To build one yourself:
+To build one yourself (from `python/`):
 
 ```bash
 uv sync --extra build
 uv run pyinstaller --noconfirm --clean packaging/gridfill.spec
-# -> dist/gridfill(.exe)
+# -> python/dist/gridfill(.exe)
 ```
 
 PyInstaller doesn't cross-compile, so this produces an executable for
@@ -32,9 +36,10 @@ Apple Silicon, so that build is arm64-only.
 
 ### App icon
 
-[src/gridfill/assets/icon.svg](src/gridfill/assets/icon.svg) is the source of
-truth. `packaging/icon.ico` (the Windows `.exe` icon, embedded at build time)
-is generated from it and checked in, so if you edit the SVG, regenerate it:
+[python/src/gridfill/assets/icon.svg](python/src/gridfill/assets/icon.svg) is the
+source of truth. `python/packaging/icon.ico` (the Windows `.exe` icon, embedded
+at build time) is generated from it and checked in, so if you edit the SVG,
+regenerate it:
 
 ```bash
 inkscape --export-type=png --export-filename=/tmp/icon_256.png \
