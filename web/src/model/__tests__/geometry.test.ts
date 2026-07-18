@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { pointInPolygon, polygonCentroid, boundsOf, type Point } from "../geometry.ts";
+import {
+  pointInPolygon,
+  polygonCentroid,
+  boundsOf,
+  distanceToSegment,
+  distanceToPolyline,
+  type Point,
+} from "../geometry.ts";
 
 const SQUARE: Point[] = [
   [0, 0],
@@ -7,6 +14,29 @@ const SQUARE: Point[] = [
   [1, 1],
   [0, 1],
 ];
+
+describe("distanceToSegment", () => {
+  it("measures perpendicular distance and clamps to the endpoints", () => {
+    const a: Point = [0, 0];
+    const b: Point = [10, 0];
+    expect(distanceToSegment(5, 3, a, b)).toBeCloseTo(3);
+    expect(distanceToSegment(-4, 0, a, b)).toBeCloseTo(4); // past the start
+    expect(distanceToSegment(0, 0, a, a)).toBeCloseTo(0); // degenerate segment
+  });
+});
+
+describe("distanceToPolyline", () => {
+  it("returns the nearest segment's distance", () => {
+    const poly: Point[] = [
+      [0, 0],
+      [10, 0],
+      [10, 10],
+    ];
+    expect(distanceToPolyline(10, 5, poly)).toBeCloseTo(0);
+    expect(distanceToPolyline(5, 2, poly)).toBeCloseTo(2);
+    expect(distanceToPolyline(0, 0, [])).toBe(Infinity);
+  });
+});
 
 describe("pointInPolygon", () => {
   it("detects interior and exterior points", () => {

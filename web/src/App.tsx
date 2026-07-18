@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { useEditor } from "./state/store.ts";
 import { openCwdFile } from "./lib/files.ts";
 import { MenuBar } from "./ui/MenuBar.tsx";
+import { Toolbar } from "./ui/Toolbar.tsx";
 import { CanvasEditor } from "./canvas/CanvasEditor.tsx";
 
 export function App() {
@@ -48,7 +49,10 @@ export function App() {
       <MenuBar onError={setError} />
       <main className="stage">
         {doc ? (
-          <CanvasEditor />
+          <>
+            <CanvasEditor />
+            <Toolbar />
+          </>
         ) : (
           <div className="empty-state">
             <h1>Gridfill Editor</h1>

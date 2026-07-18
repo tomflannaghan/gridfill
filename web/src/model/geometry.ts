@@ -63,6 +63,31 @@ export function convexHull(points: Point[]): Point[] {
   return [...lower.slice(0, -1), ...upper.slice(0, -1)];
 }
 
+/** Shortest distance from point (px, py) to the segment a-b. Used to hit-test
+ * lines and curves (as a flattened polyline). Degenerate segments (a == b)
+ * reduce to the distance to that point. */
+export function distanceToSegment(px: number, py: number, a: Point, b: Point): number {
+  const [ax, ay] = a;
+  const [bx, by] = b;
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  const t = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  return Math.hypot(px - cx, py - cy);
+}
+
+/** Shortest distance from (px, py) to a polyline (sequence of connected points).
+ * Returns Infinity for a polyline with no segments. */
+export function distanceToPolyline(px: number, py: number, points: Point[]): number {
+  let best = Infinity;
+  for (let i = 0; i < points.length - 1; i++) {
+    best = Math.min(best, distanceToSegment(px, py, points[i]!, points[i + 1]!));
+  }
+  return best;
+}
+
 /** Axis-aligned bounds of a set of points, as [minX, minY, maxX, maxY]. */
 export function boundsOf(points: Point[]): [number, number, number, number] {
   let minX = Infinity;

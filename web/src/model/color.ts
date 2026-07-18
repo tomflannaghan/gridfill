@@ -42,3 +42,9 @@ export const DEFAULT_TEXT_BGR: Bgr = [0, 0, 0];
 export function isBlack([b, g, r]: Bgr): boolean {
   return b === 0 && g === 0 && r === 0;
 }
+
+/** The colour to persist for content painted in `bgr`: null for the default
+ * black (so untouched documents stay free of colour noise), else a copy. */
+export function persistedColor(bgr: Bgr): Bgr | null {
+  return isBlack(bgr) ? null : ([...bgr] as Bgr);
+}

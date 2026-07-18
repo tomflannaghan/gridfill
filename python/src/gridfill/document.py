@@ -18,15 +18,73 @@ import cv2
 import numpy as np
 
 from .errors import DocumentError
-from .types import Grid, grid_from_dict
+from .types import Grid, Point, grid_from_dict
 
 CWD_EXTENSION = ".cwd"
 
-# An annotation: normalized (x, y), its text, and an optional BGR colour the
-# text is drawn in (``None`` -> the editor's default black). Persisted as a
-# ``[x, y, text]`` or ``[x, y, text, [b, g, r]]`` JSON array; the 3-element form
-# (produced before text colour existed) loads with ``color=None``.
-Annotation = tuple[float, float, str, tuple[int, int, int] | None]
+Color = tuple[int, int, int]
+
+# Annotations are free content drawn on top of the grid, a tagged union over
+# *kinds* (text, line, curve). Each carries an optional BGR ``color`` (``None``
+# -> the editor's default black). Coordinates are normalized [0, 1] fractions of
+# the source image, like cell polygons. Persisted as JSON objects, e.g.
+# ``{"type": "text", "x": x, "y": y, "text": "..."}`` or
+# ``{"type": "line", "points": [[x, y], [x, y]], "color": [b, g, r]}``; ``color``
+# is omitted when ``None``. Mirrors web/src/annotations/types.ts.
+
+
+@dataclass
+class TextAnnotation:
+    """Free text anchored at its top-left ``(x, y)``."""
+
+    x: float
+    y: float
+    text: str
+    color: Color | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "text",
+            "x": self.x,
+            "y": self.y,
+            "text": self.text,
+            **_color_dict(self.color),
+        }
+
+
+@dataclass
+class LineAnnotation:
+    """A straight line between two points."""
+
+    points: list[Point]
+    color: Color | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"type": "line", "points": [list(p) for p in self.points], **_color_dict(self.color)}
+
+
+@dataclass
+class CurveAnnotation:
+    """A smooth curve through its anchor points (>= 2)."""
+
+    points: list[Point]
+    color: Color | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "curve",
+            "points": [list(p) for p in self.points],
+            **_color_dict(self.color),
+        }
+
+
+Annotation = TextAnnotation | LineAnnotation | CurveAnnotation
+
+
+def _color_dict(color: Color | None) -> dict[str, Any]:
+    """The ``color`` key, present only when the colour is not the default."""
+    return {} if color is None else {"color": list(color)}
+
 
 _FORMAT_MAGIC = "gridfill"
 # Accepted on load so documents saved before the project's rename(s) still open.
@@ -38,10 +96,11 @@ _FORMAT_VERSION = 1
 class Document:
     """The full editable state of a session: source image, grids, annotations.
 
-    Annotations are ``(x, y, text, color)`` with ``x``/``y`` normalized to
-    ``[0, 1]`` as fractions of the source image width/height -- the same
-    coordinate system as :class:`~gridfill.types.Cell` polygons -- and ``color``
-    an optional BGR text colour (``None`` for the default black).
+    Annotations are a tagged union (:class:`TextAnnotation`,
+    :class:`LineAnnotation`, :class:`CurveAnnotation`) with coordinates
+    normalized to ``[0, 1]`` as fractions of the source image width/height -- the
+    same coordinate system as :class:`~gridfill.types.Cell` polygons -- and an
+    optional BGR ``color`` (``None`` for the default black).
     """
 
     image: np.ndarray
@@ -68,10 +127,7 @@ def save_document(
             "data": base64.b64encode(encoded.tobytes()).decode("ascii"),
         },
         "grids": [grid.to_dict() for grid in grids],
-        "annotations": [
-            [x, y, text] if color is None else [x, y, text, list(color)]
-            for x, y, text, color in annotations
-        ],
+        "annotations": [annotation.to_dict() for annotation in annotations],
     }
     with open(path, "w") as f:
         json.dump(payload, f)
@@ -96,12 +152,19 @@ def load_document(path: str | os.PathLike[str]) -> Document:
     return Document(image=np.asarray(image), grids=grids, annotations=annotations)
 
 
-def _annotation_from_json(a: Sequence[Any]) -> Annotation:
-    """Parse one persisted annotation, tolerating the pre-colour 3-element form."""
-    color = a[3] if len(a) > 3 and a[3] is not None else None
-    return (
-        float(a[0]),
-        float(a[1]),
-        str(a[2]),
-        (int(color[0]), int(color[1]), int(color[2])) if color is not None else None,
-    )
+def _annotation_from_json(o: dict[str, Any]) -> Annotation:
+    """Parse one persisted annotation object into its :class:`Annotation`."""
+    raw = o.get("color")
+    color: Color | None = (int(raw[0]), int(raw[1]), int(raw[2])) if raw is not None else None
+    kind = o.get("type")
+    if kind == "text":
+        return TextAnnotation(float(o["x"]), float(o["y"]), str(o["text"]), color)
+    if kind == "line":
+        return LineAnnotation(_parse_points(o["points"]), color)
+    if kind == "curve":
+        return CurveAnnotation(_parse_points(o["points"]), color)
+    raise DocumentError(f"Unknown annotation type: {kind!r}")
+
+
+def _parse_points(points: Sequence[Any]) -> list[Point]:
+    return [(float(x), float(y)) for x, y in points]
