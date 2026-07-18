@@ -83,6 +83,19 @@ body {
   cursor: pointer;
 }
 
+.toggle-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.toggle-control input[type="checkbox"] {
+  cursor: pointer;
+}
+
 .menubar .filename {
   margin-left: auto;
   color: var(--muted);

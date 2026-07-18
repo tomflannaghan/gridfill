@@ -10,7 +10,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor } from "../state/store.ts";
 import { renderScene } from "./render.ts";
-import { canvasToNorm, computeViewport, normToCanvas, type Viewport } from "./viewport.ts";
+import {
+  canvasToNorm,
+  computeViewport,
+  computeViewportForRegion,
+  normToCanvas,
+  type Viewport,
+} from "./viewport.ts";
 import { hitTestCell } from "./hitTest.ts";
 import {
   hitTestAnnotations,
@@ -23,8 +29,8 @@ import { createCurve, createLine, createText, type Annotation } from "../annotat
 import { AnnotationEditor, type AnnotationEdit } from "../ui/AnnotationEditor.tsx";
 import { bgrToCss, hexToBgr, persistedColor, type Bgr } from "../model/color.ts";
 import { saveCwd, exportImage } from "../lib/files.ts";
-import type { Point } from "../model/geometry.ts";
-import type { Direction } from "../model/grid.ts";
+import { boundsOf, type Point } from "../model/geometry.ts";
+import { boundingPolygon, type Direction } from "../model/grid.ts";
 
 const ARROW_DIRECTIONS: Record<string, Direction> = {
   ArrowUp: "up",
@@ -69,6 +75,7 @@ export function CanvasEditor() {
   const mode = useEditor((s) => s.mode);
   const tool = useEditor((s) => s.tool);
   const selectedAnnotationId = useEditor((s) => s.selectedAnnotationId);
+  const zoomToGrid = useEditor((s) => s.zoomToGrid);
 
   const [edit, setEdit] = useState<AnnotationEdit | null>(null);
   const editRef = useRef<AnnotationEdit | null>(null);
@@ -104,7 +111,17 @@ export function CanvasEditor() {
       vpRef.current = null;
       return;
     }
-    const vp = computeViewport(cssW, cssH, s.image.width, s.image.height);
+    const grid = s.selection ? s.doc.grids[s.selection.gridIndex] : undefined;
+    const vp =
+      s.zoomToGrid && grid
+        ? computeViewportForRegion(
+            cssW,
+            cssH,
+            s.image.width,
+            s.image.height,
+            boundsOf(boundingPolygon(grid)),
+          )
+        : computeViewport(cssW, cssH, s.image.width, s.image.height);
     vpRef.current = vp;
     renderScene(ctx, {
       doc: s.doc,
@@ -123,7 +140,7 @@ export function CanvasEditor() {
   // Redraw on any relevant state change.
   useEffect(() => {
     draw();
-  }, [draw, doc, image, selection, mode, tool, selectedAnnotationId, edit]);
+  }, [draw, doc, image, selection, mode, tool, selectedAnnotationId, zoomToGrid, edit]);
 
   // Redraw on container resize (canvas fills the window).
   useEffect(() => {

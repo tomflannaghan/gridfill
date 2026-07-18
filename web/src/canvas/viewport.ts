@@ -32,6 +32,31 @@ export function computeViewport(
   return { scale, offsetX, offsetY, imgW, imgH };
 }
 
+/** Fit a normalized [0,1] sub-region of the image into the canvas, centred, so
+ * that region (e.g. the selected grid) fills the view. `margin` is the fraction
+ * of the canvas kept as padding on each side so the region doesn't touch the
+ * edges. `region` is `[minX, minY, maxX, maxY]` in normalized image coords. */
+export function computeViewportForRegion(
+  canvasW: number,
+  canvasH: number,
+  imgW: number,
+  imgH: number,
+  region: [number, number, number, number],
+  margin = 0.06,
+): Viewport {
+  const [minX, minY, maxX, maxY] = region;
+  const regionW = Math.max((maxX - minX) * imgW, 1e-6);
+  const regionH = Math.max((maxY - minY) * imgH, 1e-6);
+  const usableW = canvasW * (1 - 2 * margin);
+  const usableH = canvasH * (1 - 2 * margin);
+  const scale = Math.min(usableW / regionW, usableH / regionH);
+  const centreX = ((minX + maxX) / 2) * imgW;
+  const centreY = ((minY + maxY) / 2) * imgH;
+  const offsetX = canvasW / 2 - centreX * scale;
+  const offsetY = canvasH / 2 - centreY * scale;
+  return { scale, offsetX, offsetY, imgW, imgH };
+}
+
 /** Normalized [0,1] point -> canvas pixel. */
 export function normToCanvas(vp: Viewport, [nx, ny]: Point): Point {
   return [nx * vp.imgW * vp.scale + vp.offsetX, ny * vp.imgH * vp.scale + vp.offsetY];

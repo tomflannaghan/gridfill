@@ -42,6 +42,9 @@ export interface EditorState {
   highlight: Bgr;
   /** Colour applied to newly typed letters and new annotations (default black). */
   textColor: Bgr;
+  /** When true, the view zooms to fit the grid of the current selection. A view
+   * preference (not part of the document, not undoable). */
+  zoomToGrid: boolean;
   dirty: boolean;
   /** Undo/redo stacks of whole-document snapshots (cheap: immutable + shared). */
   past: Cwd[];
@@ -65,6 +68,7 @@ export interface EditorState {
   toggleHighlight(): void;
   setHighlight(bgr: Bgr): void;
   setTextColor(bgr: Bgr): void;
+  setZoomToGrid(on: boolean): void;
 
   selectAnnotation(id: string | null): void;
   addAnnotation(a: Annotation): void;
@@ -117,6 +121,7 @@ export const useEditor = create<EditorState>((set, get) => {
     mode: "normal",
     highlight: DEFAULT_HIGHLIGHT_BGR,
     textColor: DEFAULT_TEXT_BGR,
+    zoomToGrid: true,
     dirty: false,
     past: [],
     future: [],
@@ -279,6 +284,10 @@ export const useEditor = create<EditorState>((set, get) => {
 
     setTextColor(bgr) {
       set({ textColor: bgr });
+    },
+
+    setZoomToGrid(on) {
+      set({ zoomToGrid: on });
     },
 
     selectAnnotation(id) {
