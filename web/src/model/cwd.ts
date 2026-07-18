@@ -8,11 +8,12 @@
  *     "format": "gridfill", "version": 1,
  *     "image": { "encoding": "png", "data": "<base64 PNG>" },
  *     "grids": [ <grid>, ... ],
- *     "annotations": [ [x, y, "text"], ... ]
+ *     "annotations": [ [x, y, "text"], [x, y, "text", [b,g,r]], ... ]
  *   }
  *
  * Coordinates (cell polygon vertices and annotation x/y) are fractions of the
- * source image's (width, height), in [0, 1]. Cell `background` is a BGR triple.
+ * source image's (width, height), in [0, 1]. Cell `background` / `text_color`
+ * and an annotation's optional 4th element are BGR triples.
  */
 
 import { polygonCentroid, type Point } from "./geometry.ts";
@@ -25,6 +26,9 @@ export interface Cell {
   letter: string | null;
   /** OpenCV BGR triple, or null. See model/color.ts. */
   background: [number, number, number] | null;
+  /** OpenCV BGR triple the cell's letter is drawn in, or null for the default
+   * (black). Persisted as `text_color`. */
+  textColor: [number, number, number] | null;
   /** The cell's incircle centre (normalized [0,1]), precomputed and persisted
    * by the Python library (`polygon_centre`). Where a glyph sits best and the
    * point navigation treats as the cell's location. Null only for documents
@@ -52,8 +56,9 @@ export interface IrregularGrid {
 
 export type Grid = RectangularGrid | IrregularGrid;
 
-/** An [x, y, text] annotation; x/y are [0,1] fractions of image size. */
-export type Annotation = [number, number, string];
+/** An [x, y, text, color?] annotation; x/y are [0,1] fractions of image size.
+ * `color` is the BGR text colour, or null/absent for the default (black). */
+export type Annotation = [number, number, string, ([number, number, number] | null)?];
 
 export interface Cwd {
   format: "gridfill";
@@ -84,13 +89,15 @@ function parseCell(raw: unknown): Cell {
     throw new CwdParseError(`Invalid cell kind: ${String(kind)}`);
   }
   const bg = c.background;
-  const background =
-    bg == null ? null : (asPoint3(bg) as [number, number, number]);
+  const background = bg == null ? null : asPoint3(bg);
+  const tc = c.text_color;
+  const textColor = tc == null ? null : asPoint3(tc);
   return {
     polygon: (c.polygon as unknown[]).map(asPoint),
     kind,
     letter: c.letter == null ? null : String(c.letter),
     background,
+    textColor,
     centre: c.centre == null ? null : asPoint(c.centre),
   };
 }
@@ -137,7 +144,8 @@ export function parseCwd(text: string): Cwd {
   const annotations: Annotation[] = Array.isArray(p.annotations)
     ? p.annotations.map((a) => {
         const arr = a as unknown[];
-        return [Number(arr[0]), Number(arr[1]), String(arr[2])];
+        const color = arr.length > 3 && arr[3] != null ? asPoint3(arr[3]) : null;
+        return [Number(arr[0]), Number(arr[1]), String(arr[2]), color];
       })
     : [];
   return {
@@ -161,7 +169,9 @@ export function serializeCwd(doc: Cwd): string {
     version: doc.version,
     image: { encoding: doc.image.encoding, data: doc.image.data },
     grids: doc.grids.map(gridToJson),
-    annotations: doc.annotations.map(([x, y, text]) => [x, y, text]),
+    annotations: doc.annotations.map(([x, y, text, color]) =>
+      color == null ? [x, y, text] : [x, y, text, [...color]],
+    ),
   };
   return JSON.stringify(payload);
 }
@@ -172,6 +182,7 @@ function gridToJson(grid: Grid): unknown {
     kind: c.kind,
     letter: c.letter,
     background: c.background == null ? null : [...c.background],
+    text_color: c.textColor == null ? null : [...c.textColor],
     centre: c.centre == null ? null : [c.centre[0], c.centre[1]],
   }));
   if (grid.type === "rectangular") {

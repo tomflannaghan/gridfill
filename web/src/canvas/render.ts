@@ -10,8 +10,9 @@ import { normToCanvas, type Viewport } from "./viewport.ts";
 import type { Selection } from "../state/store.ts";
 
 const BLOCK_FILL = "#0d0d0d";
-const LETTER_COLOR = "#123ec4";
-const ANNOTATION_COLOR = "#c62828";
+// Default colour for letters and annotations when they carry no explicit
+// `textColor` (black); an element's own BGR colour overrides it.
+const DEFAULT_TEXT_COLOR = "#000000";
 const ACTIVE_GRID_BORDER = "#2fbf5f";
 const SELECT_STROKE = "#123ec4";
 const MULTI_SELECT_STROKE = "#e07a1f";
@@ -87,7 +88,7 @@ function drawLetter(ctx: CanvasRenderingContext2D, vp: Viewport, cell: Cell): vo
     fontSize *= maxWidth / measured;
     ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
   }
-  ctx.fillStyle = LETTER_COLOR;
+  ctx.fillStyle = cell.textColor ? bgrToCss(cell.textColor) : DEFAULT_TEXT_COLOR;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, cx, cy);
@@ -97,11 +98,11 @@ function drawAnnotations(ctx: CanvasRenderingContext2D, scene: Scene): void {
   const { doc, viewport: vp } = scene;
   const fontSize = Math.max(11, vp.imgH * vp.scale * 0.02);
   ctx.font = `500 ${fontSize}px system-ui, sans-serif`;
-  ctx.fillStyle = ANNOTATION_COLOR;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  for (const [nx, ny, text] of doc.annotations) {
+  for (const [nx, ny, text, color] of doc.annotations) {
     const [x, y] = normToCanvas(vp, [nx, ny]);
+    ctx.fillStyle = color ? bgrToCss(color) : DEFAULT_TEXT_COLOR;
     ctx.fillText(text, x, y);
   }
 }

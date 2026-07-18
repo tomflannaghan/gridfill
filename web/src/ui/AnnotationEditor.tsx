@@ -9,6 +9,8 @@ export interface AnnotationEdit {
   y: number;
   value: string;
   fontSize: number;
+  /** CSS colour the text is drawn in, matching how it renders on the canvas. */
+  color: string;
 }
 
 interface Props {
@@ -34,6 +36,7 @@ export function AnnotationEditor({ edit, onChange, onCommit, onCancel }: Props) 
         left: edit.x,
         top: edit.y,
         fontSize: edit.fontSize,
+        color: edit.color,
       }}
       value={edit.value}
       onChange={(e) => onChange(e.target.value)}

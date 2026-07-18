@@ -60,6 +60,9 @@ class Cell:
     space as ``polygon``. It is derived from ``polygon`` and cached here so it
     is computed once and persisted to the document -- consumers (e.g. the web
     editor) read it directly instead of recomputing the distance transform.
+
+    ``text_color`` is the BGR colour the cell's ``letter`` is drawn in; ``None``
+    means the editor's default (black).
     """
 
     polygon: list[Point] = field(default_factory=list)
@@ -67,6 +70,7 @@ class Cell:
     letter: str | None = None
     background: tuple[int, int, int] | None = None
     centre: Point | None = None
+    text_color: tuple[int, int, int] | None = None
 
     def __post_init__(self) -> None:
         # Derive the centre once from the polygon (a genuine cell has >= 3
@@ -81,18 +85,21 @@ class Cell:
             "letter": self.letter,
             "background": list(self.background) if self.background is not None else None,
             "centre": list(self.centre) if self.centre is not None else None,
+            "text_color": list(self.text_color) if self.text_color is not None else None,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Cell:
         bg = data["background"]
         centre = data.get("centre")
+        tc = data.get("text_color")
         return cls(
             polygon=[(float(x), float(y)) for x, y in data["polygon"]],
             kind=CellKind(data["kind"]),
             letter=data["letter"],
             background=(int(bg[0]), int(bg[1]), int(bg[2])) if bg is not None else None,
             centre=(float(centre[0]), float(centre[1])) if centre is not None else None,
+            text_color=(int(tc[0]), int(tc[1]), int(tc[2])) if tc is not None else None,
         )
 
 

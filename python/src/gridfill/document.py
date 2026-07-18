@@ -12,6 +12,7 @@ import json
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 import cv2
 import numpy as np
@@ -20,6 +21,12 @@ from .errors import DocumentError
 from .types import Grid, grid_from_dict
 
 CWD_EXTENSION = ".cwd"
+
+# An annotation: normalized (x, y), its text, and an optional BGR colour the
+# text is drawn in (``None`` -> the editor's default black). Persisted as a
+# ``[x, y, text]`` or ``[x, y, text, [b, g, r]]`` JSON array; the 3-element form
+# (produced before text colour existed) loads with ``color=None``.
+Annotation = tuple[float, float, str, tuple[int, int, int] | None]
 
 _FORMAT_MAGIC = "gridfill"
 # Accepted on load so documents saved before the project's rename(s) still open.
@@ -31,21 +38,22 @@ _FORMAT_VERSION = 1
 class Document:
     """The full editable state of a session: source image, grids, annotations.
 
-    Annotations are ``(x, y, text)`` with ``x``/``y`` normalized to ``[0, 1]``
-    as fractions of the source image width/height -- the same coordinate system
-    as :class:`~gridfill.types.Cell` polygons.
+    Annotations are ``(x, y, text, color)`` with ``x``/``y`` normalized to
+    ``[0, 1]`` as fractions of the source image width/height -- the same
+    coordinate system as :class:`~gridfill.types.Cell` polygons -- and ``color``
+    an optional BGR text colour (``None`` for the default black).
     """
 
     image: np.ndarray
     grids: list[Grid]
-    annotations: list[tuple[float, float, str]] = field(default_factory=list)
+    annotations: list[Annotation] = field(default_factory=list)
 
 
 def save_document(
     path: str | os.PathLike[str],
     image: np.ndarray,
     grids: Sequence[Grid],
-    annotations: Sequence[tuple[float, float, str]],
+    annotations: Sequence[Annotation],
 ) -> None:
     """Write *image*, *grids*, and *annotations* to *path* as a ``.cwd`` document."""
     ok, encoded = cv2.imencode(".png", image)
@@ -60,7 +68,10 @@ def save_document(
             "data": base64.b64encode(encoded.tobytes()).decode("ascii"),
         },
         "grids": [grid.to_dict() for grid in grids],
-        "annotations": [[x, y, text] for x, y, text in annotations],
+        "annotations": [
+            [x, y, text] if color is None else [x, y, text, list(color)]
+            for x, y, text, color in annotations
+        ],
     }
     with open(path, "w") as f:
         json.dump(payload, f)
@@ -81,5 +92,16 @@ def load_document(path: str | os.PathLike[str]) -> Document:
         raise DocumentError(f"Could not decode embedded image in {os.fspath(path)!r}")
 
     grids = [grid_from_dict(g) for g in payload["grids"]]
-    annotations = [(float(x), float(y), str(text)) for x, y, text in payload.get("annotations", [])]
+    annotations = [_annotation_from_json(a) for a in payload.get("annotations", [])]
     return Document(image=np.asarray(image), grids=grids, annotations=annotations)
+
+
+def _annotation_from_json(a: Sequence[Any]) -> Annotation:
+    """Parse one persisted annotation, tolerating the pre-colour 3-element form."""
+    color = a[3] if len(a) > 3 and a[3] is not None else None
+    return (
+        float(a[0]),
+        float(a[1]),
+        str(a[2]),
+        (int(color[0]), int(color[1]), int(color[2])) if color is not None else None,
+    )

@@ -8,7 +8,7 @@ import { canvasToNorm, computeViewport, normToCanvas, type Viewport } from "./vi
 import { annotationFontSize, hitTestAnnotation, hitTestCell } from "./hitTest.ts";
 import { AnnotationEditor, type AnnotationEdit } from "../ui/AnnotationEditor.tsx";
 import { ContextMenu, type ContextMenuState } from "../ui/ContextMenu.tsx";
-import { hexToBgr } from "../model/color.ts";
+import { bgrToCss, hexToBgr } from "../model/color.ts";
 import { saveCwd, exportImage } from "../lib/files.ts";
 import type { Direction } from "../model/grid.ts";
 
@@ -112,7 +112,8 @@ export function CanvasEditor() {
     const ann = doc2.annotations[index];
     if (!ann) return;
     const [x, y] = normToCanvas(vp, [ann[0], ann[1]]);
-    setEdit({ index, x, y, value: ann[2], fontSize: annotationFontSize(vp) });
+    const color = ann[3] ? bgrToCss(ann[3]) : "#000000";
+    setEdit({ index, x, y, value: ann[2], fontSize: annotationFontSize(vp), color });
   }, []);
 
   const onClick = useCallback(
@@ -148,10 +149,18 @@ export function CanvasEditor() {
       store.enterMultiEntry(cell.gridIndex, cell.cellIndex);
       return;
     }
-    // Empty space: add a new annotation here and edit it immediately.
+    // Empty space: add a new annotation here (in the current text colour) and
+    // edit it immediately.
     const [nx, ny] = canvasToNorm(vp, cx, cy);
     const index = store.addAnnotation(nx, ny, "");
-    setEdit({ index, x: cx, y: cy, value: "", fontSize: annotationFontSize(vp) });
+    setEdit({
+      index,
+      x: cx,
+      y: cy,
+      value: "",
+      fontSize: annotationFontSize(vp),
+      color: bgrToCss(store.textColor),
+    });
   }, []);
 
   const onContextMenu = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
