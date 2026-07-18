@@ -15,6 +15,7 @@ export function MenuBar({ onError }: Props) {
   const fileName = useEditor((s) => s.fileName);
   const highlight = useEditor((s) => s.highlight);
   const textColor = useEditor((s) => s.textColor);
+  const zoomToGrid = useEditor((s) => s.zoomToGrid);
   const dirty = useEditor((s) => s.dirty);
 
   const openFile = async (file: File) => {
@@ -81,6 +82,15 @@ export function MenuBar({ onError }: Props) {
           value={bgrToHex(textColor)}
           onChange={(e) => useEditor.getState().setTextColor(hexToBgr(e.target.value))}
         />
+      </label>
+
+      <label className="toggle-control">
+        <input
+          type="checkbox"
+          checked={zoomToGrid}
+          onChange={(e) => useEditor.getState().setZoomToGrid(e.target.checked)}
+        />
+        Zoom to grid
       </label>
 
       <span className="filename">

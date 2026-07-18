@@ -26,6 +26,15 @@ The letters that have been entered, highlighting, and annotations are rendered o
 
 The grid that is currently selected should be highlighted with a green border.
 
+### Zoom to grid
+
+By default, selecting a cell **zooms the view to fit that cell's grid**, so the
+whole image is only shown when nothing is selected. This is a view preference
+toggled by the **Zoom to grid** checkbox in the top bar (on by default); with it
+off, the view always fits the whole image. Moving the selection within a grid
+keeps the same zoom; selecting a cell in another grid re-zooms to it, and
+deselecting zooms back out.
+
 ## Tools
 
 A **tool palette** on the left chooses what the pointer does. The **Select** tool
