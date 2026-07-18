@@ -25,15 +25,6 @@ class CellKind(Enum):
     LETTER = "letter"
 
 
-class Direction(Enum):
-    """A cardinal direction for arrow-key navigation between cells."""
-
-    UP = "up"
-    DOWN = "down"
-    LEFT = "left"
-    RIGHT = "right"
-
-
 @dataclass(frozen=True)
 class BoundingBox:
     """An axis-aligned box in rectified-image pixel coordinates."""
@@ -122,16 +113,6 @@ class Grid(ABC):
         space as :attr:`Cell.polygon`."""
 
     @abstractmethod
-    def neighbor(self, index: int, direction: Direction) -> int | None:
-        """The index into :attr:`cells` of the cell adjacent to ``cells[index]``
-        in *direction*, or ``None`` if there is none.
-
-        This is the one piece of navigation that depends on the grid's geometry
-        (a row/column step for a rectangular grid, a spatial search for an
-        irregular one); everything else is expressed in terms of the flat,
-        reading-ordered :attr:`cells` list."""
-
-    @abstractmethod
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dict, including a ``"type"`` key
         identifying the concrete subclass (see :func:`register_grid_type` and
@@ -184,15 +165,6 @@ class RectangularGrid(Grid):
     def cell(self, row: int, col: int) -> Cell:
         return self.cells[row * self.cols + col]
 
-    def neighbor(self, index: int, direction: Direction) -> int | None:
-        row, col = divmod(index, self.cols)
-        drow = {Direction.UP: -1, Direction.DOWN: 1}.get(direction, 0)
-        dcol = {Direction.LEFT: -1, Direction.RIGHT: 1}.get(direction, 0)
-        nrow, ncol = row + drow, col + dcol
-        if 0 <= nrow < self.rows and 0 <= ncol < self.cols:
-            return nrow * self.cols + ncol
-        return None
-
     def bounding_polygon(self) -> list[Point]:
         top_left = self.cell(0, 0).polygon[0]
         top_right = self.cell(0, self.cols - 1).polygon[1]
@@ -217,14 +189,6 @@ class RectangularGrid(Grid):
         )
 
 
-_DIRECTION_VECTORS: dict[Direction, Point] = {
-    Direction.UP: (0.0, -1.0),
-    Direction.DOWN: (0.0, 1.0),
-    Direction.LEFT: (-1.0, 0.0),
-    Direction.RIGHT: (1.0, 0.0),
-}
-
-
 @register_grid_type("irregular")
 @dataclass
 class IrregularGrid(Grid):
@@ -240,30 +204,6 @@ class IrregularGrid(Grid):
 
     def bounding_polygon(self) -> list[Point]:
         return convex_hull([pt for cell in self.cells for pt in cell.polygon])
-
-    def neighbor(self, index: int, direction: Direction) -> int | None:
-        """The nearest cell whose centre lies in *direction* within a 45-degree
-        cone -- there is no row/column grid, so navigation is spatial."""
-        dx, dy = _DIRECTION_VECTORS[direction]
-        origin = self.cells[index]
-        ox, oy = origin.centre or polygon_centre(origin.polygon)
-        best: int | None = None
-        best_score = 0.0
-        for i, cell in enumerate(self.cells):
-            if i == index:
-                continue
-            px, py = cell.centre or polygon_centre(cell.polygon)
-            vx, vy = px - ox, py - oy
-            along = vx * dx + vy * dy
-            if along <= 0:  # behind, or perpendicular to, the direction
-                continue
-            lateral = abs(vx * dy - vy * dx)
-            if lateral > along:  # outside the 45-degree cone around the direction
-                continue
-            score = along + lateral  # closest, best-aligned cell wins
-            if best is None or score < best_score:
-                best, best_score = i, score
-        return best
 
     def to_dict(self) -> dict[str, Any]:
         return {

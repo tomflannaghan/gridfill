@@ -13,7 +13,6 @@ from .errors import DocumentError, GridDetectionError, MultipleGridsError
 from .types import (
     Cell,
     CellKind,
-    Direction,
     Grid,
     IrregularGrid,
     Point,
@@ -29,7 +28,6 @@ __all__ = [
     "IrregularGrid",
     "Cell",
     "CellKind",
-    "Direction",
     "Point",
     "GridDetectionError",
     "MultipleGridsError",
