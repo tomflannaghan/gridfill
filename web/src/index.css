@@ -1,0 +1,211 @@
+:root {
+  --bg: #1e1e1e;
+  --panel: #252526;
+  --border: #3c3c3c;
+  --fg: #e0e0e0;
+  --muted: #9a9a9a;
+  --accent: #2fbf5f;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+/* Menu bar */
+.menubar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.menubar .brand {
+  font-weight: 600;
+  margin-right: 8px;
+}
+
+.menubar button {
+  background: #333;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.menubar button:hover:not(:disabled) {
+  background: #3d3d3d;
+}
+
+.menubar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.highlight-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.highlight-control input[type="color"] {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  background: none;
+  cursor: pointer;
+}
+
+.menubar .filename {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* Stage / canvas */
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.canvas-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.editor-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* Empty state */
+.empty-state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty-state h1 {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.empty-state .hint {
+  font-size: 13px;
+}
+
+/* Drag overlay */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(47, 191, 95, 0.12);
+  border: 3px dashed var(--accent);
+  font-size: 18px;
+  color: var(--fg);
+  pointer-events: none;
+}
+
+/* Inline annotation editor */
+.annotation-input {
+  position: absolute;
+  transform: translateY(-1px);
+  background: #fffdf0;
+  color: #111;
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 1px 4px;
+  min-width: 60px;
+  font-family: inherit;
+  line-height: 1.2;
+  z-index: 20;
+}
+
+/* Right-click context menu */
+.context-menu {
+  position: absolute;
+  z-index: 30;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.context-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 14px;
+  background: none;
+  color: var(--fg);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.context-menu button:hover {
+  background: #3d3d3d;
+}
+
+/* Error toast */
+.error-toast {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #7a1f1f;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  max-width: 80%;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.hidden-file-input,
+.hidden-color-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}

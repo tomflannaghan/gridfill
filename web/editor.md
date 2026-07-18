@@ -20,10 +20,11 @@ same way; only how the arrow keys move between cells differs.
 
 ## The display
 
-The source image fills a resizable canvas with the grid drawn on top of it.
-Resizing the window reflows the view so it always fills the available space.
-When a puzzle contains more than one grid, the one you're currently working in
-is highlighted.
+The source image fills a canvas that resizes with the window (maintaining aspect ratio).
+
+The letters that have been entered, highlighting, and annotations are rendered on top of the background image.
+
+The grid that is currently selected should be highlighted with a green border.
 
 ## Selecting and editing cells
 
@@ -53,8 +54,11 @@ color picker to choose a different color for subsequent highlights.
 ## Text annotations
 
 **Double-click empty space** (outside any grid) to add free text at that spot —
-useful for clue numbers, notes, or labels. **Text → Clear All Text** removes
-all annotations.
+useful for clue numbers, notes, or labels.
+
+**Click** an existing annotation and it should become editable.
+
+**Right click** an existing annotation and it should give an option to delete it.
 
 ## Saving and exporting
 

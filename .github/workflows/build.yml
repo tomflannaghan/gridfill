@@ -12,6 +12,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: python
     steps:
       - uses: actions/checkout@v4
 
@@ -29,8 +32,8 @@ jobs:
         with:
           name: gridfill-${{ matrix.os }}
           path: |
-            dist/gridfill
-            dist/gridfill.exe
+            python/dist/gridfill
+            python/dist/gridfill.exe
           if-no-files-found: ignore
 
   release:
