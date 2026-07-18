@@ -1,14 +1,14 @@
-"""Detect crossword grids in images and edit them interactively.
+"""Detect crossword grids in images and save them as ``.cwd`` documents.
 
 Public API:
 
-    from gridfill import edit_grid
+    from gridfill import detect_grids, save_document
 """
 
 from __future__ import annotations
 
+from .detection import detect_grids
 from .document import CWD_EXTENSION, Document, load_document, save_document
-from .editor import edit_grid
 from .errors import DocumentError, GridDetectionError, MultipleGridsError
 from .types import (
     Cell,
@@ -23,7 +23,7 @@ from .types import (
 __version__ = "0.2.0"
 
 __all__ = [
-    "edit_grid",
+    "detect_grids",
     "Grid",
     "RectangularGrid",
     "IrregularGrid",

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "gridfill"
 version = "0.2.0"
-description = "Detect crossword grids in images and fill them interactively."
+description = "Detect crossword grids in images and save them as .cwd documents."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

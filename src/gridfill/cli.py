@@ -1,37 +1,56 @@
-"""Command-line entry point for the interactive grid editor."""
+"""Command-line entry point: convert a grid image or PDF into a ``.cwd`` document."""
 
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from collections.abc import Sequence
+
+from .detection import detect_grids
+from .document import CWD_EXTENSION, save_document
+from .errors import GridfillError
+from .io import load_image
+from .preprocess import binarize, to_grayscale
+
+
+def _default_out_path(input_path: str) -> str:
+    """Derive the output ``.cwd`` path from an input path (swap the extension)."""
+    stem, _ = os.path.splitext(input_path)
+    return stem + CWD_EXTENSION
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="gridfill", description="Interactively edit a grid overlaid on its image."
+        prog="gridfill",
+        description="Detect the grid in an image or PDF and write it as a .cwd document.",
     )
     parser.add_argument(
         "path",
-        nargs="?",
-        default=None,
+        help="Path to the grid image, or a PDF (its last page is used).",
+    )
+    parser.add_argument(
+        "-o",
+        "--out",
         help=(
-            "Path to the grid image, a PDF (its last page is used), or a .cwd "
-            "document saved by a previous session. Omit to start with a blank "
-            "editor and use File > Open."
+            "Output path for the .cwd document. Defaults to the input path with a .cwd extension."
         ),
     )
-    parser.add_argument("-o", "--out", help="Default output path for exporting the rendered image.")
-    parser.add_argument("--font", help="Path to a TrueType font file.")
 
     args = parser.parse_args(argv)
 
-    from .editor import edit_grid
+    out_path = args.out or _default_out_path(args.path)
 
-    edit_grid(
-        args.path,
-        out_path=args.out,
-        font_path=args.font,
-    )
+    try:
+        image = load_image(args.path)
+        binary = binarize(to_grayscale(image))
+        grids = detect_grids(binary)
+        save_document(out_path, image, grids, [])
+    except (GridfillError, OSError) as exc:
+        print(f"gridfill: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Wrote {len(grids)} grid(s) to {out_path}")
     return 0
 
 

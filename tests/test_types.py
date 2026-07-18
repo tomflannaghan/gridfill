@@ -19,7 +19,7 @@ from gridfill.types import (
 
 
 def test_public_api_exports() -> None:
-    assert hasattr(gridfill, "edit_grid")
+    assert hasattr(gridfill, "detect_grids")
     assert gridfill.__version__
 
 
