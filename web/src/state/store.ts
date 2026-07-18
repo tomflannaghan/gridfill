@@ -6,7 +6,7 @@
 import { create } from "zustand";
 import type { Annotation, Cell, Cwd, Grid } from "../model/cwd.ts";
 import { neighbor, nextFillable, prevFillable, type Direction } from "../model/grid.ts";
-import { DEFAULT_HIGHLIGHT_BGR, type Bgr } from "../model/color.ts";
+import { DEFAULT_HIGHLIGHT_BGR, DEFAULT_TEXT_BGR, isBlack, type Bgr } from "../model/color.ts";
 
 export interface Selection {
   gridIndex: number;
@@ -28,6 +28,8 @@ export interface EditorState {
   selection: Selection | null;
   mode: Mode;
   highlight: Bgr;
+  /** Colour applied to newly typed letters and new annotations (default black). */
+  textColor: Bgr;
   dirty: boolean;
 
   loadDocument(doc: Cwd, image: LoadedImage, fileName: string | null): void;
@@ -45,6 +47,7 @@ export interface EditorState {
 
   toggleHighlight(): void;
   setHighlight(bgr: Bgr): void;
+  setTextColor(bgr: Bgr): void;
 
   addAnnotation(x: number, y: number, text: string): number;
   updateAnnotation(index: number, text: string): void;
@@ -69,6 +72,10 @@ function cellAt(doc: Cwd, sel: Selection): Cell | null {
 const cleared = (cell: Cell): Cell => ({ ...cell, kind: "empty", letter: null });
 const normalizeChar = (ch: string): string => (/[a-z]/i.test(ch) ? ch.toUpperCase() : ch);
 
+/** The colour to persist for content painted in `bgr`: null for the default
+ * black (so untouched documents stay free of text_color noise), else a copy. */
+const persistedColor = (bgr: Bgr): Bgr | null => (isBlack(bgr) ? null : ([...bgr] as Bgr));
+
 export const useEditor = create<EditorState>((set, get) => ({
   doc: null,
   image: null,
@@ -76,6 +83,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   selection: null,
   mode: "normal",
   highlight: DEFAULT_HIGHLIGHT_BGR,
+  textColor: DEFAULT_TEXT_BGR,
   dirty: false,
 
   loadDocument(doc, image, fileName) {
@@ -107,11 +115,12 @@ export const useEditor = create<EditorState>((set, get) => ({
   },
 
   typeChar(ch) {
-    const { doc, selection, mode } = get();
+    const { doc, selection, mode, textColor } = get();
     if (!doc || !selection) return;
     const cell = cellAt(doc, selection);
     if (!cell || cell.kind === "block") return;
     const char = normalizeChar(ch);
+    const color = persistedColor(textColor);
 
     if (mode === "multiEntry") {
       set({
@@ -119,13 +128,19 @@ export const useEditor = create<EditorState>((set, get) => ({
           ...c,
           kind: "letter",
           letter: (c.letter ?? "") + char,
+          textColor: color,
         })),
         dirty: true,
       });
       return;
     }
 
-    const next = withCell(doc, selection, (c) => ({ ...c, kind: "letter", letter: char }));
+    const next = withCell(doc, selection, (c) => ({
+      ...c,
+      kind: "letter",
+      letter: char,
+      textColor: color,
+    }));
     const grid = next.grids[selection.gridIndex]!;
     const advance = nextFillable(grid, selection.cellIndex);
     set({
@@ -201,10 +216,15 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ highlight: bgr });
   },
 
+  setTextColor(bgr) {
+    set({ textColor: bgr });
+  },
+
   addAnnotation(x, y, text) {
     const doc = get().doc;
     if (!doc) return -1;
-    const annotations: Annotation[] = [...doc.annotations, [x, y, text]];
+    const color = persistedColor(get().textColor);
+    const annotations: Annotation[] = [...doc.annotations, [x, y, text, color]];
     set({ doc: { ...doc, annotations }, dirty: true });
     return annotations.length - 1;
   },
@@ -213,7 +233,7 @@ export const useEditor = create<EditorState>((set, get) => ({
     const doc = get().doc;
     if (!doc) return;
     const annotations = doc.annotations.map((a, i): Annotation =>
-      i === index ? [a[0], a[1], text] : a,
+      i === index ? [a[0], a[1], text, a[3] ?? null] : a,
     );
     set({ doc: { ...doc, annotations }, dirty: true });
   },

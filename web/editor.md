@@ -51,10 +51,19 @@ a time, and **Enter** or **Escape** exits the mode.
 default); pressing it again removes the highlight. **Ctrl+Shift+H** opens a
 color picker to choose a different color for subsequent highlights.
 
+## Text colour
+
+Letters and annotations are drawn in **black** by default. The **Text** colour
+control in the top bar chooses the colour used for **subsequently** typed
+letters and newly added annotations, so different entries can be given different
+colours; existing content keeps the colour it was created with. Each cell's and
+annotation's colour is saved in the `.cwd` document.
+
 ## Text annotations
 
 **Double-click empty space** (outside any grid) to add free text at that spot —
-useful for clue numbers, notes, or labels.
+useful for clue numbers, notes, or labels. New annotations use the current
+**Text** colour.
 
 **Click** an existing annotation and it should become editable.
 

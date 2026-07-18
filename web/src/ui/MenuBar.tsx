@@ -14,6 +14,7 @@ export function MenuBar({ onError }: Props) {
   const doc = useEditor((s) => s.doc);
   const fileName = useEditor((s) => s.fileName);
   const highlight = useEditor((s) => s.highlight);
+  const textColor = useEditor((s) => s.textColor);
   const dirty = useEditor((s) => s.dirty);
 
   const openFile = async (file: File) => {
@@ -64,12 +65,21 @@ export function MenuBar({ onError }: Props) {
         Export JPEG
       </button>
 
-      <label className="highlight-control">
+      <label className="color-control">
         Highlight
         <input
           type="color"
           value={bgrToHex(highlight)}
           onChange={(e) => useEditor.getState().setHighlight(hexToBgr(e.target.value))}
+        />
+      </label>
+
+      <label className="color-control">
+        Text
+        <input
+          type="color"
+          value={bgrToHex(textColor)}
+          onChange={(e) => useEditor.getState().setTextColor(hexToBgr(e.target.value))}
         />
       </label>
 

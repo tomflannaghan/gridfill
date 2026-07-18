@@ -33,3 +33,12 @@ export function hexToBgr(hex: string): Bgr {
 
 /** The editor's default highlight colour (yellow), in BGR. */
 export const DEFAULT_HIGHLIGHT_BGR: Bgr = [0, 255, 255];
+
+/** The editor's default text colour (black), in BGR. */
+export const DEFAULT_TEXT_BGR: Bgr = [0, 0, 0];
+
+/** True if a BGR triple is the default text colour (black). Content painted in
+ * the default colour is persisted as `null`, keeping documents clean. */
+export function isBlack([b, g, r]: Bgr): boolean {
+  return b === 0 && g === 0 && r === 0;
+}
