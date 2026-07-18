@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypeVar
 
-from .geometry import convex_hull, polygon_centroid
+from .geometry import convex_hull, polygon_centre
 
 Point = tuple[float, float]
 
@@ -63,12 +63,25 @@ class Cell:
     ``[top-left, top-right, bottom-right, bottom-left]`` order. A cell carries
     no row/col of its own -- its position within a grid is purely a function
     of where it sits in the owning :class:`Grid`'s ``cells`` list.
+
+    ``centre`` is the cell's incircle centre (see
+    :func:`gridfill.geometry.polygon_centre`), in the same normalized ``[0, 1]``
+    space as ``polygon``. It is derived from ``polygon`` and cached here so it
+    is computed once and persisted to the document -- consumers (e.g. the web
+    editor) read it directly instead of recomputing the distance transform.
     """
 
     polygon: list[Point] = field(default_factory=list)
     kind: CellKind = CellKind.EMPTY
     letter: str | None = None
     background: tuple[int, int, int] | None = None
+    centre: Point | None = None
+
+    def __post_init__(self) -> None:
+        # Derive the centre once from the polygon (a genuine cell has >= 3
+        # vertices); an already-supplied centre (e.g. from ``from_dict``) wins.
+        if self.centre is None and len(self.polygon) >= 3:
+            self.centre = polygon_centre(self.polygon)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -76,16 +89,19 @@ class Cell:
             "kind": self.kind.value,
             "letter": self.letter,
             "background": list(self.background) if self.background is not None else None,
+            "centre": list(self.centre) if self.centre is not None else None,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Cell:
         bg = data["background"]
+        centre = data.get("centre")
         return cls(
             polygon=[(float(x), float(y)) for x, y in data["polygon"]],
             kind=CellKind(data["kind"]),
             letter=data["letter"],
             background=(int(bg[0]), int(bg[1]), int(bg[2])) if bg is not None else None,
+            centre=(float(centre[0]), float(centre[1])) if centre is not None else None,
         )
 
 
@@ -229,13 +245,14 @@ class IrregularGrid(Grid):
         """The nearest cell whose centre lies in *direction* within a 45-degree
         cone -- there is no row/column grid, so navigation is spatial."""
         dx, dy = _DIRECTION_VECTORS[direction]
-        ox, oy = polygon_centroid(self.cells[index].polygon)
+        origin = self.cells[index]
+        ox, oy = origin.centre or polygon_centre(origin.polygon)
         best: int | None = None
         best_score = 0.0
         for i, cell in enumerate(self.cells):
             if i == index:
                 continue
-            px, py = polygon_centroid(cell.polygon)
+            px, py = cell.centre or polygon_centre(cell.polygon)
             vx, vy = px - ox, py - oy
             along = vx * dx + vy * dy
             if along <= 0:  # behind, or perpendicular to, the direction

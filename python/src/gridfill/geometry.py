@@ -25,18 +25,18 @@ def point_in_polygon(x: float, y: float, polygon_px: np.ndarray) -> bool:
 
 
 def incircle(polygon_px: np.ndarray) -> tuple[float, float, int]:
-    """Center ``(x, y)`` and diameter, in pixels, of the polygon's incircle.
+    """Centre ``(x, y)`` and diameter, in pixels, of the polygon's incircle.
 
     The incircle is the largest circle that fits inside the polygon. Its
     diameter is a robust size metric for cells of any shape (square, rhombus,
     hexagon, curved wedge): unlike the axis-aligned bounding box, it reflects
     the room actually available for a glyph, ignoring thin spurs, points, and
-    concave notches. Its center is where a glyph sits most comfortably -- for an
+    concave notches. Its centre is where a glyph sits most comfortably -- for an
     irregular cell that can be well away from the vertex centroid.
 
     Computed from a distance transform of the filled polygon: the peak distance
-    is the inradius, and its location the center. The center is averaged over
-    the peak region so an elongated cell (whose centers form a ridge, not a
+    is the inradius, and its location the centre. The centre is averaged over
+    the peak region so an elongated cell (whose centres form a ridge, not a
     point) still resolves to the middle of that ridge.
     """
     x0 = int(np.floor(polygon_px[:, 0].min()))
@@ -59,6 +59,21 @@ def incircle(polygon_px: np.ndarray) -> tuple[float, float, int]:
     cx = float(xs.mean()) + off_x
     cy = float(ys.mean()) + off_y
     return cx, cy, max(1, int(round(2 * radius)))
+
+
+def polygon_centre(polygon: list[Point], resolution: int = 1024) -> Point:
+    """The polygon's incircle centre, in the same normalized ``[0, 1]`` space.
+
+    Preferred over the vertex mean for irregular cells: it returns the point
+    deepest inside the polygon (where a glyph sits best and which navigation
+    should treat as the cell's location), whereas a vertex mean drifts toward a
+    cluster of vertices and can even fall outside a concave shape. Rasterizes
+    the polygon at *resolution* pixels, takes its :func:`incircle` centre, and
+    maps back to ``[0, 1]``.
+    """
+    polygon_px = np.asarray(polygon, dtype=np.float32) * resolution
+    cx, cy, _ = incircle(polygon_px)
+    return cx / resolution, cy / resolution
 
 
 def inset_quad(polygon_px: np.ndarray, frac: float) -> np.ndarray:
@@ -106,9 +121,3 @@ def convex_hull(points: list[Point]) -> list[Point]:
             upper.pop()
         upper.append(p)
     return lower[:-1] + upper[:-1]
-
-
-def polygon_centroid(polygon: list[Point]) -> Point:
-    """Mean of a polygon's vertices -- a cheap, good-enough cell centre."""
-    n = len(polygon)
-    return sum(x for x, _ in polygon) / n, sum(y for _, y in polygon) / n
