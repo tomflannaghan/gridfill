@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 
 export interface AnnotationEdit {
-  index: number;
   /** Canvas-space position (CSS px) of the annotation's top-left. */
   x: number;
   y: number;
@@ -22,10 +21,20 @@ interface Props {
 
 export function AnnotationEditor({ edit, onChange, onCommit, onCancel }: Props) {
   const ref = useRef<HTMLInputElement>(null);
+  // Focus (and enable blur-to-commit) on the next frame rather than synchronously
+  // on mount. React StrictMode (dev) mounts, unmounts and remounts the input in
+  // one tick; focusing synchronously loses the focus to that churn and blurs the
+  // field, committing an empty edit before any typing. Deferring a frame lets the
+  // churn settle so we focus the live node and only then honour blur.
+  const acceptBlur = useRef(false);
 
   useEffect(() => {
-    ref.current?.focus();
-    ref.current?.select();
+    const id = requestAnimationFrame(() => {
+      ref.current?.focus();
+      ref.current?.select();
+      acceptBlur.current = true;
+    });
+    return () => cancelAnimationFrame(id);
   }, []);
 
   return (
@@ -40,7 +49,9 @@ export function AnnotationEditor({ edit, onChange, onCommit, onCancel }: Props) 
       }}
       value={edit.value}
       onChange={(e) => onChange(e.target.value)}
-      onBlur={onCommit}
+      onBlur={() => {
+        if (acceptBlur.current) onCommit();
+      }}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === "Enter") onCommit();

@@ -8,15 +8,23 @@
  *     "format": "gridfill", "version": 1,
  *     "image": { "encoding": "png", "data": "<base64 PNG>" },
  *     "grids": [ <grid>, ... ],
- *     "annotations": [ [x, y, "text"], [x, y, "text", [b,g,r]], ... ]
+ *     "annotations": [
+ *       { "type": "text",  "x": x, "y": y, "text": "..." },
+ *       { "type": "line",  "points": [[x,y],[x,y]], "color": [b,g,r] },
+ *       { "type": "curve", "points": [[x,y], ...] }
+ *     ]
  *   }
  *
- * Coordinates (cell polygon vertices and annotation x/y) are fractions of the
+ * Coordinates (cell polygon vertices and annotation points) are fractions of the
  * source image's (width, height), in [0, 1]. Cell `background` / `text_color`
- * and an annotation's optional 4th element are BGR triples.
+ * and an annotation's optional `color` are BGR triples (omitted for the default
+ * black). An annotation's in-memory `id` is not persisted.
  */
 
 import { polygonCentroid, type Point } from "./geometry.ts";
+import { newAnnotationId, type Annotation } from "../annotations/types.ts";
+
+export type { Annotation } from "../annotations/types.ts";
 
 export type CellKind = "block" | "empty" | "letter";
 
@@ -55,10 +63,6 @@ export interface IrregularGrid {
 }
 
 export type Grid = RectangularGrid | IrregularGrid;
-
-/** An [x, y, text, color?] annotation; x/y are [0,1] fractions of image size.
- * `color` is the BGR text colour, or null/absent for the default (black). */
-export type Annotation = [number, number, string, ([number, number, number] | null)?];
 
 export interface Cwd {
   format: "gridfill";
@@ -120,6 +124,41 @@ function parseGrid(raw: unknown): Grid {
   throw new CwdParseError(`Unknown grid type: ${String(g.type)}`);
 }
 
+function parseAnnotation(raw: unknown): Annotation {
+  if (typeof raw !== "object" || raw === null) throw new CwdParseError("Invalid annotation");
+  const o = raw as Record<string, unknown>;
+  const color = o.color == null ? null : asPoint3(o.color);
+  const id = newAnnotationId();
+  switch (o.type) {
+    case "text":
+      return { id, type: "text", color, x: Number(o.x), y: Number(o.y), text: String(o.text) };
+    case "line": {
+      const pts = (o.points as unknown[]).map(asPoint);
+      if (pts.length < 2) throw new CwdParseError("Line annotation needs two points");
+      return { id, type: "line", color, points: [pts[0]!, pts[1]!] };
+    }
+    case "curve": {
+      const pts = (o.points as unknown[]).map(asPoint);
+      if (pts.length < 2) throw new CwdParseError("Curve annotation needs at least two points");
+      return { id, type: "curve", color, points: pts };
+    }
+    default:
+      throw new CwdParseError(`Unknown annotation type: ${String(o.type)}`);
+  }
+}
+
+function annotationToJson(a: Annotation): unknown {
+  const color = a.color == null ? {} : { color: [...a.color] };
+  switch (a.type) {
+    case "text":
+      return { type: "text", x: a.x, y: a.y, text: a.text, ...color };
+    case "line":
+      return { type: "line", points: a.points.map(([x, y]) => [x, y]), ...color };
+    case "curve":
+      return { type: "curve", points: a.points.map(([x, y]) => [x, y]), ...color };
+  }
+}
+
 /** Parse the text of a `.cwd` file into a validated document model. */
 export function parseCwd(text: string): Cwd {
   let payload: unknown;
@@ -142,11 +181,7 @@ export function parseCwd(text: string): Cwd {
   }
   const grids = Array.isArray(p.grids) ? p.grids.map(parseGrid) : [];
   const annotations: Annotation[] = Array.isArray(p.annotations)
-    ? p.annotations.map((a) => {
-        const arr = a as unknown[];
-        const color = arr.length > 3 && arr[3] != null ? asPoint3(arr[3]) : null;
-        return [Number(arr[0]), Number(arr[1]), String(arr[2]), color];
-      })
+    ? p.annotations.map(parseAnnotation)
     : [];
   return {
     format: FORMAT_MAGIC,
@@ -169,9 +204,7 @@ export function serializeCwd(doc: Cwd): string {
     version: doc.version,
     image: { encoding: doc.image.encoding, data: doc.image.data },
     grids: doc.grids.map(gridToJson),
-    annotations: doc.annotations.map(([x, y, text, color]) =>
-      color == null ? [x, y, text] : [x, y, text, [...color]],
-    ),
+    annotations: doc.annotations.map(annotationToJson),
   };
   return JSON.stringify(payload);
 }

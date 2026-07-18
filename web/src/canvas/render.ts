@@ -7,7 +7,14 @@ import { bgrToCss } from "../model/color.ts";
 import { boundingPolygon } from "../model/grid.ts";
 import { boundsOf, polygonCentroid, type Point } from "../model/geometry.ts";
 import { normToCanvas, type Viewport } from "./viewport.ts";
-import type { Selection } from "../state/store.ts";
+import type { Selection, Tool } from "../state/store.ts";
+import type { Annotation } from "../annotations/types.ts";
+import {
+  annotationBounds,
+  annotationHandles,
+  renderAnnotation,
+} from "../annotations/registry.ts";
+import { handleRadius } from "../annotations/sizes.ts";
 
 const BLOCK_FILL = "#0d0d0d";
 // Default colour for letters and annotations when they carry no explicit
@@ -26,6 +33,15 @@ export interface Scene {
   mode: "normal" | "multiEntry";
   /** Draw selection / active-grid chrome. False for image export. */
   showChrome: boolean;
+  /** The active tool (handles are only shown for the select tool). */
+  tool?: Tool;
+  /** The selected annotation, whose editing handles are drawn. */
+  selectedAnnotationId?: string | null;
+  /** An in-progress annotation (a line/curve being drawn, or one being dragged)
+   * drawn on top as a live preview. */
+  draft?: Annotation | null;
+  /** Id of an annotation being dragged: skipped so `draft` replaces it. */
+  hiddenAnnotationId?: string | null;
 }
 
 export function renderScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
@@ -38,7 +54,10 @@ export function renderScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
 
   drawAnnotations(ctx, scene);
 
-  if (scene.showChrome) drawChrome(ctx, scene);
+  if (scene.showChrome) {
+    drawChrome(ctx, scene);
+    drawAnnotationSelection(ctx, scene);
+  }
 }
 
 function pathPolygon(ctx: CanvasRenderingContext2D, vp: Viewport, polygon: Point[]): void {
@@ -95,15 +114,43 @@ function drawLetter(ctx: CanvasRenderingContext2D, vp: Viewport, cell: Cell): vo
 }
 
 function drawAnnotations(ctx: CanvasRenderingContext2D, scene: Scene): void {
-  const { doc, viewport: vp } = scene;
-  const fontSize = Math.max(11, vp.imgH * vp.scale * 0.02);
-  ctx.font = `500 ${fontSize}px system-ui, sans-serif`;
-  ctx.textAlign = "left";
-  ctx.textBaseline = "top";
-  for (const [nx, ny, text, color] of doc.annotations) {
-    const [x, y] = normToCanvas(vp, [nx, ny]);
-    ctx.fillStyle = color ? bgrToCss(color) : DEFAULT_TEXT_COLOR;
-    ctx.fillText(text, x, y);
+  const { doc, viewport: vp, draft, hiddenAnnotationId } = scene;
+  for (const a of doc.annotations) {
+    if (a.id === hiddenAnnotationId) continue;
+    renderAnnotation(ctx, vp, a);
+  }
+  if (draft) renderAnnotation(ctx, vp, draft);
+}
+
+/** Draw the dashed bounding box and handles for the selected annotation (select
+ * tool only). While dragging, `draft` carries the live geometry. */
+function drawAnnotationSelection(ctx: CanvasRenderingContext2D, scene: Scene): void {
+  const { doc, viewport: vp, tool, selectedAnnotationId, draft } = scene;
+  if (tool !== "select" || !selectedAnnotationId) return;
+  const a =
+    draft && draft.id === selectedAnnotationId
+      ? draft
+      : doc.annotations.find((x) => x.id === selectedAnnotationId);
+  if (!a) return;
+
+  const [bx, by, bw, bh] = annotationBounds(ctx, vp, a);
+  const pad = 3;
+  ctx.strokeStyle = SELECT_STROKE;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  ctx.strokeRect(bx - pad, by - pad, bw + 2 * pad, bh + 2 * pad);
+  ctx.setLineDash([]);
+
+  const r = handleRadius(vp) * 0.7;
+  for (const h of annotationHandles(a)) {
+    const [x, y] = normToCanvas(vp, h.point);
+    ctx.beginPath();
+    ctx.rect(x - r, y - r, 2 * r, 2 * r);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.strokeStyle = SELECT_STROKE;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
   }
 }
 

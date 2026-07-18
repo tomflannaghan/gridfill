@@ -63,17 +63,49 @@ function sampleDoc(): Cwd {
       },
     ],
     annotations: [
-      [0.3, 0.4, "note", null],
-      [0.6, 0.7, "red note", [0, 0, 255]],
+      { id: "a1", type: "text", color: null, x: 0.3, y: 0.4, text: "note" },
+      { id: "a2", type: "text", color: [0, 0, 255], x: 0.6, y: 0.7, text: "red note" },
+      { id: "a3", type: "line", color: null, points: [[0.1, 0.1], [0.4, 0.2]] },
+      { id: "a4", type: "curve", color: [10, 20, 30], points: [[0.1, 0.1], [0.2, 0.3], [0.4, 0.25]] },
     ],
   };
 }
 
+/** Annotation ids are regenerated on load, so blank them before comparing. */
+function withoutIds(doc: Cwd): Cwd {
+  return { ...doc, annotations: doc.annotations.map((a) => ({ ...a, id: "" })) };
+}
+
 describe("parseCwd / serializeCwd", () => {
-  it("round-trips a document losslessly", () => {
+  it("round-trips a document losslessly (ids aside)", () => {
     const doc = sampleDoc();
     const reparsed = parseCwd(serializeCwd(doc));
-    expect(reparsed).toEqual(doc);
+    expect(withoutIds(reparsed)).toEqual(withoutIds(doc));
+  });
+
+  it("assigns each parsed annotation a fresh, unique id", () => {
+    const reparsed = parseCwd(serializeCwd(sampleDoc()));
+    const ids = reparsed.annotations.map((a) => a.id);
+    expect(ids.every((id) => id.length > 0)).toBe(true);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("omits a default (null) colour on disk", () => {
+    const doc = sampleDoc();
+    const payload = JSON.parse(serializeCwd(doc));
+    expect(payload.annotations[0]).toEqual({ type: "text", x: 0.3, y: 0.4, text: "note" });
+    expect(payload.annotations[2]).toEqual({ type: "line", points: [[0.1, 0.1], [0.4, 0.2]] });
+  });
+
+  it("rejects an unknown annotation type", () => {
+    const bad = JSON.stringify({
+      format: "gridfill",
+      version: 1,
+      image: { encoding: "png", data: PNG_1x1 },
+      grids: [],
+      annotations: [{ type: "sparkle", x: 0.1, y: 0.2 }],
+    });
+    expect(() => parseCwd(bad)).toThrow(CwdParseError);
   });
 
   it("preserves the embedded image bytes unchanged", () => {
@@ -117,11 +149,10 @@ describe("parseCwd / serializeCwd", () => {
           ],
         },
       ],
-      annotations: [[0.3, 0.4, "note"]], // pre-colour 3-element form
+      annotations: [],
     });
     const doc = parseCwd(legacy);
     expect(doc.grids[0]!.cells[0]!.textColor).toBeNull();
-    expect(doc.annotations[0]).toEqual([0.3, 0.4, "note", null]);
   });
 
   it("rejects non-gridfill JSON", () => {

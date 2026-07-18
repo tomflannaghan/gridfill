@@ -26,7 +26,16 @@ The letters that have been entered, highlighting, and annotations are rendered o
 
 The grid that is currently selected should be highlighted with a green border.
 
+## Tools
+
+A **tool palette** on the left chooses what the pointer does. The **Select** tool
+(the default) is for filling in the grid — everything under *Selecting and editing
+cells* below applies to it. The **Text**, **Line** and **Curve** tools add
+annotations, and the **Eraser** deletes them. See *Annotations* below.
+
 ## Selecting and editing cells
+
+*(Select tool.)*
 
 - **Click** a cell to select it (and switch to its grid). Clicking empty space
   deselects.
@@ -55,19 +64,43 @@ color picker to choose a different color for subsequent highlights.
 
 Letters and annotations are drawn in **black** by default. The **Text** colour
 control in the top bar chooses the colour used for **subsequently** typed
-letters and newly added annotations, so different entries can be given different
-colours; existing content keeps the colour it was created with. Each cell's and
-annotation's colour is saved in the `.cwd` document.
+letters and newly created annotations (text, lines and curves), so different
+entries can be given different colours; existing content keeps the colour it was
+created with. Each cell's and annotation's colour is saved in the `.cwd`
+document.
 
-## Text annotations
+## Annotations
 
-**Double-click empty space** (outside any grid) to add free text at that spot —
-useful for clue numbers, notes, or labels. New annotations use the current
-**Text** colour.
+Annotations are free content drawn on top of the grid — text, lines and curves —
+useful for clue numbers, notes, labels, or marking up the puzzle. Each tool
+creates one kind:
 
-**Click** an existing annotation and it should become editable.
+- **Text** — click empty space to place free text and start typing; press
+  **Enter** or click away to finish.
+- **Line** — press and drag to draw a straight line; release to finish.
+- **Curve** — click to place a series of points; the curve is drawn smoothly
+  through them. **Double-click** or press **Enter** to finish, **Escape** to
+  cancel.
 
-**Right click** an existing annotation and it should give an option to delete it.
+All new annotations use the current **Text** colour.
+
+### Editing annotations
+
+With the **Select** tool:
+
+- **Click** an annotation to select it; a dashed outline and control handles
+  appear.
+- **Drag** its body to move it, or drag a **handle** to reshape it (an endpoint
+  of a line, an anchor of a curve).
+- **Double-click** a text annotation to edit its text.
+- With an annotation selected, **Delete** (or **Backspace**) removes it.
+
+The **Eraser** tool deletes any annotation you click on.
+
+## Undo and redo
+
+**Undo (Ctrl+Z)** reverses the last change — a typed letter, a highlight, or any
+annotation edit — and **Redo (Ctrl+Shift+Z**, or **Ctrl+Y)** reapplies it.
 
 ## Saving and exporting
 
