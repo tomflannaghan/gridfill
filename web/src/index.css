@@ -83,7 +83,7 @@ body {
   cursor: pointer;
 }
 
-.apply-btn {
+.menubar .apply-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
