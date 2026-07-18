@@ -56,6 +56,20 @@ annotations, and the **Eraser** deletes them. See *Annotations* below.
   **Delete** clears the selected cell without moving.
 - **Escape** deselects.
 
+### Selecting multiple cells
+
+Several cells can be selected at once so a colour can be applied to all of them:
+
+- **Shift+Arrow** extends the selection as it moves, adding exactly the cells the
+  cursor visits.
+- **Drag a rectangle** (press on the canvas and drag) selects every cell with a
+  corner inside the rectangle; releasing without dragging is an ordinary click.
+
+Selected cells are shown with a blue fill. A plain arrow key, a single click, or
+typing collapses back to a single selection. The **paintbrush** buttons in the
+top bar apply the current highlight or text colour to the whole selection (see
+*Highlighting* and *Text colour*).
+
 ### Multi-letter cells
 
 **Double-click** a cell to enter *multi-entry mode*, where several characters
@@ -69,6 +83,10 @@ a time, and **Enter** or **Escape** exits the mode.
 default); pressing it again removes the highlight. **Ctrl+Shift+H** opens a
 color picker to choose a different color for subsequent highlights.
 
+The **paintbrush** button beside the **Highlight** colour in the top bar applies
+that colour as the background of every selected cell (or the single selected
+cell). This is a single undoable step.
+
 ## Text colour
 
 Letters and annotations are drawn in **black** by default. The **Text** colour
@@ -77,6 +95,11 @@ letters and newly created annotations (text, lines and curves), so different
 entries can be given different colours; existing content keeps the colour it was
 created with. Each cell's and annotation's colour is saved in the `.cwd`
 document.
+
+The **paintbrush** button beside the **Text** colour recolours the letters of
+every selected cell (or the single selected cell) with the current text colour —
+a single undoable step. This is the way to change the colour of letters already
+entered.
 
 ## Annotations
 

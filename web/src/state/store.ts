@@ -8,12 +8,15 @@ import { create } from "zustand";
 import type { Cell, Cwd, Grid } from "../model/cwd.ts";
 import type { Annotation } from "../annotations/types.ts";
 import { neighbor, nextFillable, prevFillable, type Direction } from "../model/grid.ts";
+import { cellsInRect } from "../canvas/hitTest.ts";
 import { DEFAULT_HIGHLIGHT_BGR, DEFAULT_TEXT_BGR, persistedColor, type Bgr } from "../model/color.ts";
 
 export interface Selection {
   gridIndex: number;
   cellIndex: number;
 }
+
+const selectionKey = (s: Selection): string => `${s.gridIndex}:${s.cellIndex}`;
 
 export type Mode = "normal" | "multiEntry";
 
@@ -36,6 +39,9 @@ export interface EditorState {
   fileName: string | null;
   tool: Tool;
   selection: Selection | null;
+  /** Additional cells in a multi-cell selection (Shift+Arrow or marquee). Empty
+   * means only the single active `selection` (if any) is selected. */
+  selectedCells: Selection[];
   /** The selected annotation (for moving / handle editing), by id. */
   selectedAnnotationId: string | null;
   mode: Mode;
@@ -60,12 +66,22 @@ export interface EditorState {
   enterMultiEntry(gridIndex: number, cellIndex: number): void;
   exitMultiEntry(): void;
 
+  /** Extend the multi-cell selection by moving the active cell in `direction`,
+   * accumulating each visited cell (Shift+Arrow). */
+  extendSelection(direction: Direction): void;
+  /** Select every cell with a vertex inside the normalized rectangle (marquee). */
+  selectCellsInRect(rect: [number, number, number, number]): void;
+
   typeChar(ch: string): void;
   backspace(): void;
   deleteCell(): void;
   move(direction: Direction): void;
 
   toggleHighlight(): void;
+  /** Apply the current highlight colour as the background of every selected cell. */
+  applyHighlightToSelection(): void;
+  /** Apply the current text colour to every selected cell's letter. */
+  applyTextColorToSelection(): void;
   setHighlight(bgr: Bgr): void;
   setTextColor(bgr: Bgr): void;
   setZoomToGrid(on: boolean): void;
@@ -85,6 +101,26 @@ function withCell(doc: Cwd, sel: Selection, update: (cell: Cell) => Cell): Cwd {
   const grids = doc.grids.map((grid, gi) => {
     if (gi !== sel.gridIndex) return grid;
     const cells = grid.cells.map((cell, ci) => (ci === sel.cellIndex ? update(cell) : cell));
+    return { ...grid, cells } as Grid;
+  });
+  return { ...doc, grids };
+}
+
+/** Return a copy of `doc` with every cell in `targets` replaced by the result of
+ * `update`, cloning only the grids/cells that changed. `block` cells are left
+ * untouched (colours don't apply to them). */
+function withCells(doc: Cwd, targets: Selection[], update: (cell: Cell) => Cell): Cwd {
+  const byGrid = new Map<number, Set<number>>();
+  for (const t of targets) {
+    if (!byGrid.has(t.gridIndex)) byGrid.set(t.gridIndex, new Set());
+    byGrid.get(t.gridIndex)!.add(t.cellIndex);
+  }
+  const grids = doc.grids.map((grid, gi) => {
+    const indices = byGrid.get(gi);
+    if (!indices) return grid;
+    const cells = grid.cells.map((cell, ci) =>
+      indices.has(ci) && cell.kind !== "block" ? update(cell) : cell,
+    );
     return { ...grid, cells } as Grid;
   });
   return { ...doc, grids };
@@ -111,12 +147,21 @@ export const useEditor = create<EditorState>((set, get) => {
     };
   };
 
+  /** The cells an apply-colour action targets: the multi-cell selection, or the
+   * single active cell when there's no multi-selection. */
+  const selectionTargets = (): Selection[] => {
+    const { selection, selectedCells } = get();
+    if (selectedCells.length) return selectedCells;
+    return selection ? [selection] : [];
+  };
+
   return {
     doc: null,
     image: null,
     fileName: null,
     tool: "select",
     selection: null,
+    selectedCells: [],
     selectedAnnotationId: null,
     mode: "normal",
     highlight: DEFAULT_HIGHLIGHT_BGR,
@@ -132,6 +177,7 @@ export const useEditor = create<EditorState>((set, get) => {
         image,
         fileName,
         selection: null,
+        selectedCells: [],
         selectedAnnotationId: null,
         mode: "normal",
         dirty: false,
@@ -146,6 +192,7 @@ export const useEditor = create<EditorState>((set, get) => {
         image: null,
         fileName: null,
         selection: null,
+        selectedCells: [],
         selectedAnnotationId: null,
         mode: "normal",
         dirty: false,
@@ -155,15 +202,20 @@ export const useEditor = create<EditorState>((set, get) => {
     },
 
     setTool(tool) {
-      set({ tool, selectedAnnotationId: null });
+      set({ tool, selectedCells: [], selectedAnnotationId: null });
     },
 
     selectCell(gridIndex, cellIndex) {
-      set({ selection: { gridIndex, cellIndex }, mode: "normal", selectedAnnotationId: null });
+      set({
+        selection: { gridIndex, cellIndex },
+        selectedCells: [],
+        mode: "normal",
+        selectedAnnotationId: null,
+      });
     },
 
     clearSelection() {
-      set({ selection: null, mode: "normal", selectedAnnotationId: null });
+      set({ selection: null, selectedCells: [], mode: "normal", selectedAnnotationId: null });
     },
 
     enterMultiEntry(gridIndex, cellIndex) {
@@ -171,7 +223,39 @@ export const useEditor = create<EditorState>((set, get) => {
       if (!doc) return;
       const cell = doc.grids[gridIndex]?.cells[cellIndex];
       if (!cell || cell.kind === "block") return;
-      set({ selection: { gridIndex, cellIndex }, mode: "multiEntry" });
+      set({ selection: { gridIndex, cellIndex }, selectedCells: [], mode: "multiEntry" });
+    },
+
+    extendSelection(direction) {
+      const { doc, selection, selectedCells } = get();
+      if (!doc || !selection) return;
+      const grid = doc.grids[selection.gridIndex];
+      if (!grid) return;
+      // Seed the accumulated set with the starting cell.
+      const seen = new Set(selectedCells.map(selectionKey));
+      const cells = selectedCells.length ? [...selectedCells] : [selection];
+      if (!selectedCells.length) seen.add(selectionKey(selection));
+
+      const next = neighbor(grid, selection.cellIndex, direction);
+      if (next === null) {
+        set({ selectedCells: cells, mode: "normal" });
+        return;
+      }
+      const nextSel: Selection = { gridIndex: selection.gridIndex, cellIndex: next };
+      if (!seen.has(selectionKey(nextSel))) cells.push(nextSel);
+      set({ selection: nextSel, selectedCells: cells, mode: "normal" });
+    },
+
+    selectCellsInRect(rect) {
+      const doc = get().doc;
+      if (!doc) return;
+      const cells = cellsInRect(doc, rect);
+      set({
+        selection: cells[0] ?? null,
+        selectedCells: cells,
+        mode: "normal",
+        selectedAnnotationId: null,
+      });
     },
 
     exitMultiEntry() {
@@ -211,6 +295,7 @@ export const useEditor = create<EditorState>((set, get) => {
       set({
         ...commit(next),
         selection: advance === null ? selection : { ...selection, cellIndex: advance },
+        selectedCells: [],
       });
     },
 
@@ -260,7 +345,8 @@ export const useEditor = create<EditorState>((set, get) => {
       const grid = doc.grids[selection.gridIndex];
       if (!grid) return;
       const next = neighbor(grid, selection.cellIndex, direction);
-      if (next !== null) set({ selection: { ...selection, cellIndex: next }, mode: "normal" });
+      if (next !== null)
+        set({ selection: { ...selection, cellIndex: next }, selectedCells: [], mode: "normal" });
     },
 
     toggleHighlight() {
@@ -276,6 +362,21 @@ export const useEditor = create<EditorState>((set, get) => {
           })),
         ),
       );
+    },
+
+    applyHighlightToSelection() {
+      const { doc, highlight } = get();
+      const targets = selectionTargets();
+      if (!doc || targets.length === 0) return;
+      set(commit(withCells(doc, targets, (c) => ({ ...c, background: [...highlight] as Bgr }))));
+    },
+
+    applyTextColorToSelection() {
+      const { doc, textColor } = get();
+      const targets = selectionTargets();
+      if (!doc || targets.length === 0) return;
+      const color = persistedColor(textColor);
+      set(commit(withCells(doc, targets, (c) => ({ ...c, textColor: color }))));
     },
 
     setHighlight(bgr) {
@@ -326,6 +427,7 @@ export const useEditor = create<EditorState>((set, get) => {
         future: [doc, ...future],
         dirty: true,
         selection: null,
+        selectedCells: [],
         selectedAnnotationId: null,
       });
     },
@@ -340,6 +442,7 @@ export const useEditor = create<EditorState>((set, get) => {
         past: [...past, doc],
         dirty: true,
         selection: null,
+        selectedCells: [],
         selectedAnnotationId: null,
       });
     },

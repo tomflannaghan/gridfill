@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useEditor } from "../state/store.ts";
+import { useEditor, type Selection } from "../state/store.ts";
 import { renderScene } from "./render.ts";
 import {
   canvasToNorm,
@@ -61,7 +61,8 @@ type EditTarget =
 type Gesture =
   | { kind: "line"; start: Point; color: Bgr | null }
   | { kind: "move"; id: string; original: Annotation; startNorm: Point; moved: boolean }
-  | { kind: "handle"; id: string; handleId: string; original: Annotation; moved: boolean };
+  | { kind: "handle"; id: string; handleId: string; original: Annotation; moved: boolean }
+  | { kind: "marquee"; startNorm: Point; startCanvas: Point; cellHit: Selection | null; moved: boolean };
 
 export function CanvasEditor() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -75,6 +76,7 @@ export function CanvasEditor() {
   const mode = useEditor((s) => s.mode);
   const tool = useEditor((s) => s.tool);
   const selectedAnnotationId = useEditor((s) => s.selectedAnnotationId);
+  const selectedCells = useEditor((s) => s.selectedCells);
   const zoomToGrid = useEditor((s) => s.zoomToGrid);
 
   const [edit, setEdit] = useState<AnnotationEdit | null>(null);
@@ -87,6 +89,8 @@ export function CanvasEditor() {
   const curveRef = useRef<Point[] | null>(null);
   const draftRef = useRef<Annotation | null>(null);
   const hiddenIdRef = useRef<string | null>(null);
+  // Live marquee rectangle [startNorm, currentNorm] while dragging a selection box.
+  const marqueeRef = useRef<[Point, Point] | null>(null);
 
   // (Re)size the canvas to its container and draw the current scene.
   const draw = useCallback(() => {
@@ -128,19 +132,21 @@ export function CanvasEditor() {
       viewport: vp,
       image: s.image.element,
       selection: s.selection,
+      selectedCells: s.selectedCells,
       mode: s.mode,
       showChrome: true,
       tool: s.tool,
       selectedAnnotationId: s.selectedAnnotationId,
       draft: draftRef.current,
       hiddenAnnotationId: hiddenIdRef.current,
+      marquee: marqueeRef.current,
     });
   }, []);
 
   // Redraw on any relevant state change.
   useEffect(() => {
     draw();
-  }, [draw, doc, image, selection, mode, tool, selectedAnnotationId, zoomToGrid, edit]);
+  }, [draw, doc, image, selection, selectedCells, mode, tool, selectedAnnotationId, zoomToGrid, edit]);
 
   // Redraw on container resize (canvas fills the window).
   useEffect(() => {
@@ -157,6 +163,7 @@ export function CanvasEditor() {
     curveRef.current = null;
     draftRef.current = null;
     hiddenIdRef.current = null;
+    marqueeRef.current = null;
     draw();
   }, [tool, draw]);
 
@@ -268,10 +275,17 @@ export function CanvasEditor() {
             };
             return;
           }
-          // Otherwise a cell, or empty space.
+          // Otherwise a cell or empty space: begin a potential marquee. A press
+          // with no drag falls back to a plain click (select the cell / clear).
           const cell = hitTestCell(store.doc, vp, cx, cy);
-          if (cell) store.selectCell(cell.gridIndex, cell.cellIndex);
-          else store.clearSelection();
+          canvasRef.current?.setPointerCapture(e.pointerId);
+          gestureRef.current = {
+            kind: "marquee",
+            startNorm: norm,
+            startCanvas: [cx, cy],
+            cellHit: cell,
+            moved: false,
+          };
           return;
         }
         case "text": {
@@ -315,6 +329,16 @@ export function CanvasEditor() {
       const g = gestureRef.current;
 
       if (g) {
+        if (g.kind === "marquee") {
+          if (!g.moved && Math.hypot(cx - g.startCanvas[0], cy - g.startCanvas[1]) > DRAG_THRESHOLD) {
+            g.moved = true;
+          }
+          if (g.moved) {
+            marqueeRef.current = [g.startNorm, norm];
+            draw();
+          }
+          return;
+        }
         if (g.kind === "line") {
           draftRef.current = { id: DRAFT_ID, type: "line", color: g.color, points: [g.start, norm] };
         } else if (g.kind === "move") {
@@ -355,6 +379,21 @@ export function CanvasEditor() {
       const g = gestureRef.current;
       canvasRef.current?.releasePointerCapture?.(e.pointerId);
       if (!vp || !g) return;
+
+      if (g.kind === "marquee") {
+        if (g.moved && marqueeRef.current) {
+          const [a, b] = marqueeRef.current;
+          store.selectCellsInRect([a[0], a[1], b[0], b[1]]);
+        } else if (g.cellHit) {
+          store.selectCell(g.cellHit.gridIndex, g.cellHit.cellIndex);
+        } else {
+          store.clearSelection();
+        }
+        gestureRef.current = null;
+        marqueeRef.current = null;
+        draw();
+        return;
+      }
 
       if (g.kind === "line") {
         const draft = draftRef.current;
@@ -491,7 +530,8 @@ export function CanvasEditor() {
 
       if (e.key in ARROW_DIRECTIONS) {
         e.preventDefault();
-        store.move(ARROW_DIRECTIONS[e.key]!);
+        if (e.shiftKey) store.extendSelection(ARROW_DIRECTIONS[e.key]!);
+        else store.move(ARROW_DIRECTIONS[e.key]!);
         return;
       }
       switch (e.key) {

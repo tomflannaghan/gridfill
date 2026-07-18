@@ -18,3 +18,25 @@ export function hitTestCell(doc: Cwd, vp: Viewport, cx: number, cy: number): Sel
   }
   return null;
 }
+
+/** Every cell (across all grids) with at least one polygon vertex inside the
+ * normalized rectangle `rect` ([x0, y0, x1, y1], corners in any order). Used for
+ * marquee selection — a cell is caught if the rectangle touches any of its
+ * corners. */
+export function cellsInRect(doc: Cwd, rect: [number, number, number, number]): Selection[] {
+  const minX = Math.min(rect[0], rect[2]);
+  const maxX = Math.max(rect[0], rect[2]);
+  const minY = Math.min(rect[1], rect[3]);
+  const maxY = Math.max(rect[1], rect[3]);
+  const out: Selection[] = [];
+  for (let gi = 0; gi < doc.grids.length; gi++) {
+    const cells = doc.grids[gi]!.cells;
+    for (let ci = 0; ci < cells.length; ci++) {
+      const inside = cells[ci]!.polygon.some(
+        ([x, y]) => x >= minX && x <= maxX && y >= minY && y <= maxY,
+      );
+      if (inside) out.push({ gridIndex: gi, cellIndex: ci });
+    }
+  }
+  return out;
+}

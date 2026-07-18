@@ -30,6 +30,10 @@ export interface Scene {
   viewport: Viewport;
   image: HTMLImageElement;
   selection: Selection | null;
+  /** Cells in a multi-cell selection, drawn highlighted (chrome only). */
+  selectedCells?: Selection[];
+  /** Live marquee rectangle [startNorm, currentNorm] while dragging (chrome only). */
+  marquee?: [Point, Point] | null;
   mode: "normal" | "multiEntry";
   /** Draw selection / active-grid chrome. False for image export. */
   showChrome: boolean;
@@ -56,6 +60,7 @@ export function renderScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
 
   if (scene.showChrome) {
     drawChrome(ctx, scene);
+    drawMarquee(ctx, scene);
     drawAnnotationSelection(ctx, scene);
   }
 }
@@ -155,7 +160,7 @@ function drawAnnotationSelection(ctx: CanvasRenderingContext2D, scene: Scene): v
 }
 
 function drawChrome(ctx: CanvasRenderingContext2D, scene: Scene): void {
-  const { doc, viewport: vp, selection, mode } = scene;
+  const { doc, viewport: vp, selection, selectedCells, mode } = scene;
   if (!selection) return;
   const grid = doc.grids[selection.gridIndex] as Grid | undefined;
   if (!grid) return;
@@ -167,6 +172,21 @@ function drawChrome(ctx: CanvasRenderingContext2D, scene: Scene): void {
   ctx.lineJoin = "round";
   ctx.stroke();
 
+  // Multi-cell selection: fill each selected cell (the active cell is drawn
+  // more strongly on top below).
+  if (selectedCells && selectedCells.length > 1) {
+    ctx.fillStyle = "rgba(18,62,196,0.16)";
+    ctx.strokeStyle = SELECT_STROKE;
+    ctx.lineWidth = 1.5;
+    for (const sc of selectedCells) {
+      const c = doc.grids[sc.gridIndex]?.cells[sc.cellIndex];
+      if (!c) continue;
+      pathPolygon(ctx, vp, c.polygon);
+      ctx.fill();
+      ctx.stroke();
+    }
+  }
+
   // Selected-cell indicator.
   const cell = grid.cells[selection.cellIndex];
   if (cell) {
@@ -177,4 +197,23 @@ function drawChrome(ctx: CanvasRenderingContext2D, scene: Scene): void {
     ctx.fillStyle = mode === "multiEntry" ? "rgba(224,122,31,0.14)" : "rgba(18,62,196,0.12)";
     ctx.fill();
   }
+}
+
+/** Draw the live marquee (rubber-band) selection rectangle. */
+function drawMarquee(ctx: CanvasRenderingContext2D, scene: Scene): void {
+  const { viewport: vp, marquee } = scene;
+  if (!marquee) return;
+  const [ax, ay] = normToCanvas(vp, marquee[0]);
+  const [bx, by] = normToCanvas(vp, marquee[1]);
+  const x = Math.min(ax, bx);
+  const y = Math.min(ay, by);
+  const w = Math.abs(bx - ax);
+  const h = Math.abs(by - ay);
+  ctx.fillStyle = "rgba(18,62,196,0.08)";
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = SELECT_STROKE;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 3]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.setLineDash([]);
 }
