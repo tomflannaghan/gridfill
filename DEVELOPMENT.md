@@ -20,18 +20,10 @@ Prebuilt Windows, macOS, and Linux executables are attached to each
 To build one yourself:
 
 ```bash
-UV_NO_MANAGED_PYTHON=1 uv sync --extra build
-UV_NO_MANAGED_PYTHON=1 uv run pyinstaller --noconfirm --clean packaging/gridfill.spec
+uv sync --extra build
+uv run pyinstaller --noconfirm --clean packaging/gridfill.spec
 # -> dist/gridfill(.exe)
 ```
-
-`UV_NO_MANAGED_PYTHON=1` forces uv to build against your system's Python
-rather than downloading its own. On Linux this matters: uv's managed
-(python-build-standalone) builds bundle a Tcl/Tk that PyInstaller can't
-freeze cleanly, producing an executable that crashes on startup with
-`undefined symbol: TclBN_mp_to_ubin`. Your system Python doesn't have this
-problem, so long as it has tkinter available (`python3 -c "import tkinter"`;
-install your distro's `python3-tkinter`/`python3-tk` package if that fails).
 
 PyInstaller doesn't cross-compile, so this produces an executable for
 whichever OS you run it on; the release workflow builds all three by running
@@ -41,9 +33,8 @@ Apple Silicon, so that build is arm64-only.
 ### App icon
 
 [src/gridfill/assets/icon.svg](src/gridfill/assets/icon.svg) is the source of
-truth. `icon.png` (the Tk window/taskbar icon, loaded at runtime) and
-`packaging/icon.ico` (the Windows `.exe` icon, embedded at build time) are
-generated from it and checked in, so if you edit the SVG, regenerate both:
+truth. `packaging/icon.ico` (the Windows `.exe` icon, embedded at build time)
+is generated from it and checked in, so if you edit the SVG, regenerate it:
 
 ```bash
 inkscape --export-type=png --export-filename=/tmp/icon_256.png \
@@ -52,7 +43,6 @@ inkscape --export-type=png --export-filename=/tmp/icon_256.png \
 python3 -c "
 from PIL import Image
 img = Image.open('/tmp/icon_256.png').convert('RGBA')
-img.save('src/gridfill/assets/icon.png')
 img.save('packaging/icon.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
 "
 ```

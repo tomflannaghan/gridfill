@@ -1,4 +1,4 @@
-"""Core data types shared across grid detection and the editor."""
+"""Core data types shared across grid detection and document I/O."""
 
 from __future__ import annotations
 
@@ -112,8 +112,8 @@ class Grid(ABC):
 
         This is the one piece of navigation that depends on the grid's geometry
         (a row/column step for a rectangular grid, a spatial search for an
-        irregular one); everything else the editor does is expressed in terms of
-        the flat, reading-ordered :attr:`cells` list."""
+        irregular one); everything else is expressed in terms of the flat,
+        reading-ordered :attr:`cells` list."""
 
     @abstractmethod
     def to_dict(self) -> dict[str, Any]:

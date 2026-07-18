@@ -4,14 +4,15 @@ Guidance for working in this repo.
 
 ## What this is
 
-A Python library and interactive editor for detecting a crossword grid's layout
-(blocked or barred) from a scanned image or PDF and letting a person fill it in
-by hand — click a cell, type letters, highlight cells, add free-text
-annotations — then save progress as a `.cwd` document (JSON: base64 source
-image + grid state) or export the result as an image. PDF input uses the last
-page, rendered at 300 DPI (print quality at A4). Public API: `edit_grid()` in
-`gridfill`. There is no automatic letter recognition; all cell
-content is entered manually.
+A Python library and CLI for detecting a crossword grid's layout (blocked or
+barred) from a scanned image or PDF and saving it as a `.cwd` document (JSON:
+base64 source image + grid state) — the empty grid, ready to be filled in.
+PDF input uses the last page, rendered at 300 DPI (print quality at A4). Public
+API: `detect_grids()` and `save_document()` in `gridfill`. There is no
+automatic letter recognition; the document holds only the detected layout.
+
+`editor.md` describes an interactive Tk editor that has been removed from the
+codebase; it is kept only as a reference for a possible future front end.
 
 ## Dev environment & commands
 

@@ -1,4 +1,4 @@
-# PyInstaller spec for the standalone editor executable.
+# PyInstaller spec for the standalone gridfill CLI executable.
 #
 # Build (from the repo root, with the "build" extra installed):
 #   pyinstaller packaging/gridfill.spec
@@ -16,17 +16,8 @@ a = Analysis(
     [os.path.join(repo_root, "packaging", "gui_main.py")],
     pathex=[repo_root, os.path.join(repo_root, "src")],
     binaries=[],
-    datas=[
-        (
-            os.path.join(repo_root, "src", "gridfill", "assets", "fonts"),
-            os.path.join("gridfill", "assets", "fonts"),
-        ),
-        (
-            os.path.join(repo_root, "src", "gridfill", "assets", "icon.png"),
-            os.path.join("gridfill", "assets"),
-        ),
-    ],
-    hiddenimports=["PIL._tkinter_finder"],
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -50,7 +41,7 @@ exe = EXE(
     upx=False,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

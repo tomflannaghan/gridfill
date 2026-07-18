@@ -1,8 +1,8 @@
-"""PyInstaller entry point: launch the editor like ``gridfill``.
+"""PyInstaller entry point: run the ``gridfill`` CLI.
 
 A plain script (rather than pointing PyInstaller at the console entry point)
 so a file dropped onto the packaged executable is picked up as the path to
-open, and so the app launches windowed with no console.
+convert.
 """
 
 from __future__ import annotations

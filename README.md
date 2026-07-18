@@ -1,15 +1,14 @@
 # gridfill
 
-Detect a crossword grid's layout from a scanned image or PDF and
-edit it interactively: click a cell, type letters, highlight cells, drop
-free-text annotations, then save your progress as a `.cwd` document or export
-the result as an image.
+Detect a crossword grid's layout from a scanned image or PDF and save it as a
+`.cwd` document (JSON: the source image plus the detected grid state) ready to
+be filled in.
 
 ## Standalone executable
 
 No Python install needed. Prebuilt Windows, macOS, and Linux executables are
-attached to each [release](../../releases). Double-click, or drag a
-scan/PDF/`.cwd` file onto the executable to open it directly.
+attached to each [release](../../releases). Drag a scan or PDF onto the
+executable, or run it from a terminal (see **Usage**).
 
 The macOS build is unsigned, so Gatekeeper will refuse to open it with a
 plain double-click the first time; right-click the executable and choose
@@ -18,21 +17,14 @@ plain double-click the first time; right-click the executable and choose
 ## Usage
 
 ```bash
-gridfill scan.png -o filled_out.png
-# A PDF also works; its last page is used:
-gridfill scan.pdf
-# Or resume a session saved earlier:
-gridfill scan.cwd
-# Or start blank and use File > Open:
-gridfill
+gridfill scan.png              # writes scan.cwd next to the input
+gridfill scan.pdf              # a PDF also works; its last page is used
+gridfill scan.png -o out.cwd   # choose the output path
 ```
 
-In the editor: click a cell to select it and type a letter; double-click for
-multi-letter cells (barred grids). `Ctrl+O` opens an image, PDF, or `.cwd`
-document; `Ctrl+S` saves your progress to a `.cwd` document (the source image
-plus all grid state, so you can reopen and keep editing); `Ctrl+Shift+S`
-exports the rendered image. See the menu bar for highlighting and free-text
-annotation tools.
+`gridfill` detects the grid(s) in the image and writes a `.cwd` document — the
+source image plus the detected grid layout. There is no automatic letter
+recognition; the document holds the empty grid ready to be filled in.
 
 ## Development
 
