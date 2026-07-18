@@ -6,8 +6,8 @@
  * only geometry-dependent piece is `neighbor`.
  */
 
-import type { Grid } from "./cwd.ts";
-import { convexHull, polygonCentroid, type Point } from "./geometry.ts";
+import { cellCentre, type Grid } from "./cwd.ts";
+import { convexHull, type Point } from "./geometry.ts";
 
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -54,12 +54,12 @@ function irregularNeighbor(
   const [dx, dy] = DIRECTION_VECTORS[direction];
   const origin = grid.cells[index];
   if (!origin) return null;
-  const [ox, oy] = polygonCentroid(origin.polygon);
+  const [ox, oy] = cellCentre(origin);
   let best: number | null = null;
   let bestScore = 0;
   for (let i = 0; i < grid.cells.length; i++) {
     if (i === index) continue;
-    const [px, py] = polygonCentroid(grid.cells[i]!.polygon);
+    const [px, py] = cellCentre(grid.cells[i]!);
     const vx = px - ox;
     const vy = py - oy;
     const along = vx * dx + vy * dy;

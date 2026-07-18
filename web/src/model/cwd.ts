@@ -15,7 +15,7 @@
  * source image's (width, height), in [0, 1]. Cell `background` is a BGR triple.
  */
 
-import type { Point } from "./geometry.ts";
+import { polygonCentroid, type Point } from "./geometry.ts";
 
 export type CellKind = "block" | "empty" | "letter";
 
@@ -25,6 +25,17 @@ export interface Cell {
   letter: string | null;
   /** OpenCV BGR triple, or null. See model/color.ts. */
   background: [number, number, number] | null;
+  /** The cell's incircle centre (normalized [0,1]), precomputed and persisted
+   * by the Python library (`polygon_centre`). Where a glyph sits best and the
+   * point navigation treats as the cell's location. Null only for documents
+   * predating the field. Prefer `cellCentre()` to read it. */
+  centre: Point | null;
+}
+
+/** The cell's persisted incircle centre, falling back to the vertex mean for
+ * older documents that predate the saved `centre`. */
+export function cellCentre(cell: Cell): Point {
+  return cell.centre ?? polygonCentroid(cell.polygon);
 }
 
 export interface RectangularGrid {
@@ -80,6 +91,7 @@ function parseCell(raw: unknown): Cell {
     kind,
     letter: c.letter == null ? null : String(c.letter),
     background,
+    centre: c.centre == null ? null : asPoint(c.centre),
   };
 }
 
@@ -160,6 +172,7 @@ function gridToJson(grid: Grid): unknown {
     kind: c.kind,
     letter: c.letter,
     background: c.background == null ? null : [...c.background],
+    centre: c.centre == null ? null : [c.centre[0], c.centre[1]],
   }));
   if (grid.type === "rectangular") {
     return { type: "rectangular", rows: grid.rows, cols: grid.cols, cells };

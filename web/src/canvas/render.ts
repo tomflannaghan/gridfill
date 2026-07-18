@@ -2,7 +2,7 @@
  * same code renders both the interactive canvas and the (chrome-free) export.
  */
 
-import type { Cell, Cwd, Grid } from "../model/cwd.ts";
+import { cellCentre, type Cell, type Cwd, type Grid } from "../model/cwd.ts";
 import { bgrToCss } from "../model/color.ts";
 import { boundingPolygon } from "../model/grid.ts";
 import { boundsOf, polygonCentroid, type Point } from "../model/geometry.ts";
@@ -76,7 +76,7 @@ function drawLetter(ctx: CanvasRenderingContext2D, vp: Viewport, cell: Cell): vo
   const [minX, minY, maxX, maxY] = boundsOf(canvasPts);
   const w = maxX - minX;
   const h = maxY - minY;
-  const [cx, cy] = normToCanvas(vp, polygonCentroid(cell.polygon));
+  const [cx, cy] = normToCanvas(vp, cellCentre(cell));
   const text = cell.letter ?? "";
 
   let fontSize = Math.min(w, h) * 0.62;

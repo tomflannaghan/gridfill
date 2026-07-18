@@ -8,7 +8,7 @@ import pytest
 
 from gridfill.detection import detect_grid
 from gridfill.errors import GridDetectionError
-from gridfill.geometry import incircle
+from gridfill.geometry import incircle, polygon_centre
 from gridfill.preprocess import binarize, to_grayscale
 from gridfill.types import Cell, RectangularGrid
 
@@ -85,8 +85,8 @@ def test_detection_handles_slight_rotation() -> None:
         [(0.0, 0.0), (30.0, 0.0), (30.0, 30.0), (0.0, 30.0)],
     ],
 )
-def test_incircle_center_is_interior(polygon: list[tuple[float, float]]) -> None:
-    """The incircle center must sit inside the polygon with the full incircle
+def test_incircle_centre_is_interior(polygon: list[tuple[float, float]]) -> None:
+    """The incircle centre must sit inside the polygon with the full incircle
     fitting within it.
 
     Regression: a polygon whose far edge lay on the bounding-box maximum used to
@@ -98,9 +98,22 @@ def test_incircle_center_is_interior(polygon: list[tuple[float, float]]) -> None
 
     signed = cv2.pointPolygonTest(poly, (cx, cy), True)
     assert signed > 0  # strictly interior, never on an edge
-    # The reported incircle genuinely fits: the center is at least its radius
+    # The reported incircle genuinely fits: the centre is at least its radius
     # away from every edge (allowing 1px for rasterization).
     assert signed >= diameter / 2 - 1.0
+
+
+def test_polygon_centre_is_interior_and_normalized() -> None:
+    """``polygon_centre`` returns the incircle centre in the polygon's own
+    normalized [0, 1] space, strictly inside a concave (L-shaped) cell where the
+    vertex mean would fall in the missing corner."""
+    # An L-shape: the vertex mean sits near (0.4, 0.4), inside the cut-out notch.
+    poly = [(0.0, 0.0), (0.6, 0.0), (0.6, 0.3), (0.3, 0.3), (0.3, 0.6), (0.0, 0.6)]
+    cx, cy = polygon_centre(poly)
+    assert 0.0 < cx < 1.0
+    assert 0.0 < cy < 1.0
+    signed = cv2.pointPolygonTest(np.array(poly, dtype=np.float32), (cx, cy), True)
+    assert signed > 0  # inside the polygon, not in the notch
 
 
 def test_raises_when_no_grid_present() -> None:

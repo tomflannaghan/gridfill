@@ -26,6 +26,7 @@ function sampleDoc(): Cwd {
             kind: "letter",
             letter: "A",
             background: [0, 255, 255],
+            centre: [0.25, 0.5],
           },
           {
             polygon: [
@@ -37,6 +38,7 @@ function sampleDoc(): Cwd {
             kind: "empty",
             letter: null,
             background: null,
+            centre: null,
           },
         ],
       },
@@ -52,6 +54,7 @@ function sampleDoc(): Cwd {
             kind: "empty",
             letter: null,
             background: null,
+            centre: null,
           },
         ],
       },
