@@ -11,12 +11,12 @@ function imageHeightPx(vp: Viewport): number {
 
 /** Font size (px) for text annotations. */
 export function annotationFontSize(vp: Viewport): number {
-  return Math.max(11, imageHeightPx(vp) * 0.02);
+  return Math.max(8, imageHeightPx(vp) * 0.02);
 }
 
 /** Stroke width (px) for line and curve annotations. */
 export function annotationStrokeWidth(vp: Viewport): number {
-  return Math.max(2, imageHeightPx(vp) * 0.005);
+  return Math.max(1, imageHeightPx(vp) * 0.0025);
 }
 
 /** Radius (px) of the draggable editing handles shown on a selected annotation.

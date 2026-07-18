@@ -1,9 +1,9 @@
 :root {
-  --bg: #1e1e1e;
-  --panel: #252526;
-  --border: #3c3c3c;
-  --fg: #e0e0e0;
-  --muted: #9a9a9a;
+  --bg: #ececec;
+  --panel: #f5f5f5;
+  --border: #d0d0d0;
+  --fg: #1a1a1a;
+  --muted: #666666;
   --accent: #2fbf5f;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -48,7 +48,7 @@ body {
 }
 
 .menubar button {
-  background: #333;
+  background: #ffffff;
   color: var(--fg);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -58,7 +58,7 @@ body {
 }
 
 .menubar button:hover:not(:disabled) {
-  background: #3d3d3d;
+  background: #e8e8e8;
 }
 
 .menubar button:disabled {
@@ -91,14 +91,14 @@ body {
   height: 24px;
   padding: 0;
   color: var(--fg);
-  background: #333;
+  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
 }
 
 .apply-btn:hover:not(:disabled) {
-  background: #3d3d3d;
+  background: #e8e8e8;
 }
 
 .apply-btn:disabled {
@@ -207,7 +207,7 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .toolbar .tool {
@@ -224,7 +224,7 @@ body {
 }
 
 .toolbar .tool:hover {
-  background: #3d3d3d;
+  background: #e8e8e8;
 }
 
 .toolbar .tool.active {
@@ -239,13 +239,13 @@ body {
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
-  background: #7a1f1f;
+  background: #dc3545;
   color: #fff;
   padding: 10px 16px;
   border-radius: 6px;
   cursor: pointer;
   max-width: 80%;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 }
 
 .hidden-file-input,
