@@ -83,6 +83,29 @@ body {
   cursor: pointer;
 }
 
+.apply-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  color: var(--fg);
+  background: #333;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.apply-btn:hover:not(:disabled) {
+  background: #3d3d3d;
+}
+
+.apply-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .toggle-control {
   display: flex;
   align-items: center;

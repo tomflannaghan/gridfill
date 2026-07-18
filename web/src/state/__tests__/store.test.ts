@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useEditor } from "../store.ts";
-import type { Cwd } from "../../model/cwd.ts";
+import type { Cell, Cwd } from "../../model/cwd.ts";
 import { createLine, createText } from "../../annotations/types.ts";
 
 function emptyDoc(): Cwd {
@@ -12,6 +12,51 @@ function loadEmpty(): void {
     .getState()
     .loadDocument(emptyDoc(), { element: {} as HTMLImageElement, width: 100, height: 100 }, "t.cwd");
 }
+
+function square(cx: number, cy: number): Cell {
+  const s = 0.4;
+  return {
+    polygon: [
+      [cx - s, cy - s],
+      [cx + s, cy - s],
+      [cx + s, cy + s],
+      [cx - s, cy + s],
+    ],
+    kind: "empty",
+    letter: null,
+    background: null,
+    textColor: null,
+    centre: [cx, cy],
+  };
+}
+
+function doc3x3(): Cwd {
+  const cells: Cell[] = [];
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) cells.push(square(col, row));
+  }
+  return {
+    format: "gridfill",
+    version: 1,
+    image: { encoding: "png", data: "" },
+    grids: [{ type: "rectangular", rows: 3, cols: 3, cells }],
+    annotations: [],
+  };
+}
+
+function loadGrid(): void {
+  useEditor
+    .getState()
+    .loadDocument(doc3x3(), { element: {} as HTMLImageElement, width: 100, height: 100 }, "g.cwd");
+}
+
+const cellIndices = () =>
+  useEditor
+    .getState()
+    .selectedCells.map((s) => s.cellIndex)
+    .sort((a, b) => a - b);
+
+const cellOf = (i: number): Cell => useEditor.getState().doc!.grids[0]!.cells[i]!;
 
 describe("annotation CRUD", () => {
   beforeEach(loadEmpty);
@@ -84,5 +129,93 @@ describe("tools", () => {
     s.setTool("line");
     expect(useEditor.getState().tool).toBe("line");
     expect(useEditor.getState().selectedAnnotationId).toBeNull();
+  });
+});
+
+describe("multi-cell selection", () => {
+  beforeEach(loadGrid);
+
+  it("extendSelection accumulates exactly the visited cells", () => {
+    const s = useEditor.getState();
+    s.selectCell(0, 0);
+    s.extendSelection("right"); // -> cell 1
+    s.extendSelection("right"); // -> cell 2
+    s.extendSelection("down"); // -> cell 5
+    expect(useEditor.getState().selection).toEqual({ gridIndex: 0, cellIndex: 5 });
+    expect(cellIndices()).toEqual([0, 1, 2, 5]);
+  });
+
+  it("extendSelection does not duplicate a revisited cell", () => {
+    const s = useEditor.getState();
+    s.selectCell(0, 0);
+    s.extendSelection("right"); // -> 1
+    s.extendSelection("left"); // back to 0 (already in the set)
+    expect(cellIndices()).toEqual([0, 1]);
+  });
+
+  it("a plain move collapses back to a single selection", () => {
+    const s = useEditor.getState();
+    s.selectCell(0, 0);
+    s.extendSelection("right");
+    expect(cellIndices()).toEqual([0, 1]);
+    s.move("down");
+    expect(useEditor.getState().selectedCells).toEqual([]);
+  });
+
+  it("selectCellsInRect selects cells with a vertex in the rectangle", () => {
+    const s = useEditor.getState();
+    s.selectCellsInRect([-0.5, -0.5, 2.5, 0.5]); // top row
+    expect(cellIndices()).toEqual([0, 1, 2]);
+    expect(useEditor.getState().selection).toEqual({ gridIndex: 0, cellIndex: 0 });
+  });
+});
+
+describe("apply colour to selection", () => {
+  beforeEach(loadGrid);
+
+  it("applies the highlight to every selected cell in one undo step", () => {
+    const s = useEditor.getState();
+    const highlight = s.highlight;
+    s.selectCell(0, 0);
+    s.extendSelection("right"); // cells 0, 1
+    const undoDepth = useEditor.getState().past.length;
+
+    s.applyHighlightToSelection();
+    expect(cellOf(0).background).toEqual(highlight);
+    expect(cellOf(1).background).toEqual(highlight);
+    expect(cellOf(2).background).toBeNull();
+    expect(useEditor.getState().past.length).toBe(undoDepth + 1); // single step
+
+    useEditor.getState().undo();
+    expect(cellOf(0).background).toBeNull();
+    expect(cellOf(1).background).toBeNull();
+  });
+
+  it("applies to a single selected cell", () => {
+    const s = useEditor.getState();
+    s.setTextColor([10, 20, 30]);
+    s.selectCell(0, 4);
+    s.applyTextColorToSelection();
+    expect(cellOf(4).textColor).toEqual([10, 20, 30]);
+    expect(cellOf(0).textColor).toBeNull();
+  });
+
+  it("skips block cells and does nothing without a selection", () => {
+    const s = useEditor.getState();
+    // Make cell 1 a block, then marquee the whole top row.
+    useEditor.setState((st) => {
+      const cells = st.doc!.grids[0]!.cells.map((c, i) => (i === 1 ? { ...c, kind: "block" as const } : c));
+      const grids = [{ ...st.doc!.grids[0]!, cells }];
+      return { doc: { ...st.doc!, grids } };
+    });
+    s.selectCellsInRect([-0.5, -0.5, 2.5, 0.5]);
+    s.applyHighlightToSelection();
+    expect(cellOf(1).background).toBeNull(); // block untouched
+    expect(cellOf(0).background).not.toBeNull();
+
+    s.clearSelection();
+    const before = useEditor.getState().doc;
+    s.applyHighlightToSelection(); // no selection -> no-op
+    expect(useEditor.getState().doc).toBe(before);
   });
 });
