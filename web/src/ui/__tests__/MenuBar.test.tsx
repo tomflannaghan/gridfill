@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/react";
 import { MenuBar } from "../MenuBar.tsx";
 import { useEditor } from "../../state/store.ts";
@@ -111,5 +111,81 @@ describe("MenuBar colour pickers", () => {
     fireEvent.click(getByRole("button", { name: "Apply text colour" }));
 
     expect(useEditor.getState().doc!.grids[0]!.cells[0]!.textColour).toEqual([10, 20, 30]);
+  });
+});
+
+describe("MenuBar document lifecycle", () => {
+  beforeEach(() => {
+    loadGrid();
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("closes the document when the logo is clicked, with no unsaved changes", () => {
+    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    fireEvent.click(getByRole("button", { name: "Gridfill" }));
+
+    expect(useEditor.getState().doc).toBeNull();
+  });
+
+  it("warns before closing the document via the logo if there are unsaved changes, and respects Cancel", () => {
+    useEditor.getState().selectCell(0, 0);
+    useEditor.getState().typeChar("A");
+    expect(useEditor.getState().dirty).toBe(true);
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    fireEvent.click(getByRole("button", { name: "Gridfill" }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(useEditor.getState().doc).not.toBeNull();
+
+    confirmSpy.mockReturnValue(true);
+    fireEvent.click(getByRole("button", { name: "Gridfill" }));
+    expect(useEditor.getState().doc).toBeNull();
+  });
+
+  it("warns before opening a new file if there are unsaved changes", () => {
+    useEditor.getState().selectCell(0, 0);
+    useEditor.getState().typeChar("A");
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { getByRole, container } = render(<MenuBar onError={() => {}} />);
+    const fileInput = container.querySelector<HTMLInputElement>("input.hidden-file-input")!;
+    const clickSpy = vi.spyOn(fileInput, "click");
+
+    fireEvent.click(getByRole("button", { name: "Open" }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(clickSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not warn when opening a new file with no unsaved changes", () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    const { getByRole, container } = render(<MenuBar onError={() => {}} />);
+    const fileInput = container.querySelector<HTMLInputElement>("input.hidden-file-input")!;
+    const clickSpy = vi.spyOn(fileInput, "click");
+
+    fireEvent.click(getByRole("button", { name: "Open" }));
+
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  it("clears the dirty flag after Save", () => {
+    useEditor.getState().selectCell(0, 0);
+    useEditor.getState().typeChar("A");
+    expect(useEditor.getState().dirty).toBe(true);
+
+    // saveCwd triggers a real download; stub the pieces it touches (jsdom has
+    // no createObjectURL/revokeObjectURL implementation to spy on).
+    URL.createObjectURL = vi.fn().mockReturnValue("blob:mock");
+    URL.revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    fireEvent.click(getByRole("button", { name: "Save" }));
+
+    expect(useEditor.getState().dirty).toBe(false);
   });
 });

@@ -64,6 +64,12 @@ export function MenuBar({ onError }: Props) {
   const isCwdFile = (file: File) =>
     file.name.toLowerCase().endsWith(".cwd") || file.type === "application/json";
 
+  // Opening a different document or returning to the start screen discards
+  // the current one; warn first if it has unsaved changes. Closing the tab
+  // doesn't need this check — the current doc is already auto-saved.
+  const confirmDiscardIfDirty = () =>
+    !dirty || window.confirm("You have unsaved changes. Discard them?");
+
   const openFile = async (file: File) => {
     setDetecting(!isCwdFile(file));
     try {
@@ -86,16 +92,30 @@ export function MenuBar({ onError }: Props) {
 
   return (
     <header className="menubar">
-      <span className="brand">
+      <button
+        type="button"
+        className="icon-btn"
+        disabled={!hasDoc}
+        onClick={() => {
+          if (!confirmDiscardIfDirty()) return;
+          useEditor.getState().closeDocument();
+        }}
+        title="Close document and return to the start screen"
+        aria-label="Gridfill"
+      >
         <img src={logoUrl} alt="" className="brand-logo" />
-        Gridfill Editor
-      </span>
+      </button>
+
+      <span className="menubar-divider" />
 
       <button
         type="button"
         className="icon-btn"
         disabled={detecting}
-        onClick={() => fileInputRef.current?.click()}
+        onClick={() => {
+          if (!confirmDiscardIfDirty()) return;
+          fileInputRef.current?.click();
+        }}
         title="Open a .cwd document, or an image/PDF to detect a grid from via the gridfill backend"
         aria-label={detecting ? "Loading…" : "Open"}
       >
@@ -105,7 +125,12 @@ export function MenuBar({ onError }: Props) {
         type="button"
         className="icon-btn"
         disabled={!hasDoc}
-        onClick={() => doc && saveCwd(doc, fileName)}
+        onClick={() => {
+          if (doc) {
+            saveCwd(doc, fileName);
+            useEditor.getState().markSaved();
+          }
+        }}
         title="Save"
         aria-label="Save"
       >

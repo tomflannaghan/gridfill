@@ -62,6 +62,9 @@ export interface EditorState {
 
   loadDocument(doc: Cwd, image: LoadedImage, fileName: string | null): void;
   closeDocument(): void;
+  /** Clear the dirty flag after an explicit Save (the save itself happens
+   * outside the store, in lib/files.ts). */
+  markSaved(): void;
 
   setTool(tool: Tool): void;
 
@@ -214,6 +217,10 @@ export const useEditor = create<EditorState>((set, get) => {
         past: [],
         future: [],
       });
+    },
+
+    markSaved() {
+      set({ dirty: false });
     },
 
     setTool(tool) {
