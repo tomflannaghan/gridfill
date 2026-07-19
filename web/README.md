@@ -38,5 +38,5 @@ one from the Python CLI, e.g. `cd ../python && uv run gridfill scan.png`.
 Cell polygon vertices and annotation positions are stored as `[0, 1]` fractions
 of the **source image** size (decode the embedded PNG to get its pixel
 dimensions). Cell/highlight colours are OpenCV **BGR** triples — convert via
-`src/model/color.ts` for anything CSS. On save the embedded image bytes are
+`src/model/colour.ts` for anything CSS. On save the embedded image bytes are
 re-written unchanged for a loss-free round-trip.

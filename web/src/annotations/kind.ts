@@ -4,7 +4,7 @@
 
 import type { Viewport } from "../canvas/viewport.ts";
 import type { Point } from "../model/geometry.ts";
-import { bgrToCss } from "../model/color.ts";
+import { bgrToCss } from "../model/colour.ts";
 import type { Annotation } from "./types.ts";
 
 /** A draggable editing handle: a control point the user can grab to reshape the
@@ -31,6 +31,6 @@ export interface AnnotationKind<A extends Annotation = Annotation> {
 }
 
 /** CSS colour an annotation is drawn in (its own BGR, else the default black). */
-export function annotationColor(color: Annotation["color"]): string {
-  return color ? bgrToCss(color) : "#000000";
+export function annotationColour(colour: Annotation["colour"]): string {
+  return colour ? bgrToCss(colour) : "#000000";
 }

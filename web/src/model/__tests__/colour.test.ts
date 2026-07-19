@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bgrToHex, bgrToCss, hexToBgr } from "../color.ts";
+import { bgrToHex, bgrToCss, hexToBgr } from "../colour.ts";
 
 describe("BGR <-> CSS colour conversion", () => {
   it("converts a BGR triple to #rrggbb (swapping channel order)", () => {

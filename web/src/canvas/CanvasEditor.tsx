@@ -27,7 +27,7 @@ import {
 import { annotationFontSize } from "../annotations/sizes.ts";
 import { createCurve, createLine, createText, type Annotation } from "../annotations/types.ts";
 import { AnnotationEditor, type AnnotationEdit } from "../ui/AnnotationEditor.tsx";
-import { bgrToCss, hexToBgr, persistedColor, type Bgr } from "../model/color.ts";
+import { bgrToCss, hexToBgr, persistedColour, type Bgr } from "../model/colour.ts";
 import { saveCwd, exportImage } from "../lib/files.ts";
 import { boundsOf, type Point } from "../model/geometry.ts";
 import { boundingPolygon, type Direction } from "../model/grid.ts";
@@ -54,12 +54,12 @@ const CURSOR: Record<string, string> = {
 
 /** Where an open text editor writes to: a new annotation or an existing one. */
 type EditTarget =
-  | { kind: "new"; nx: number; ny: number; color: Bgr | null }
+  | { kind: "new"; nx: number; ny: number; colour: Bgr | null }
   | { kind: "existing"; id: string };
 
 /** An in-progress pointer drag (select/line tools). */
 type Gesture =
-  | { kind: "line"; start: Point; color: Bgr | null }
+  | { kind: "line"; start: Point; colour: Bgr | null }
   | { kind: "move"; id: string; original: Annotation; startNorm: Point; moved: boolean }
   | { kind: "handle"; id: string; handleId: string; original: Annotation; moved: boolean }
   | { kind: "marquee"; startNorm: Point; startCanvas: Point; cellHit: Selection | null; moved: boolean };
@@ -68,7 +68,7 @@ export function CanvasEditor() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const vpRef = useRef<Viewport | null>(null);
-  const colorInputRef = useRef<HTMLInputElement>(null);
+  const colourInputRef = useRef<HTMLInputElement>(null);
 
   const doc = useEditor((s) => s.doc);
   const image = useEditor((s) => s.image);
@@ -174,7 +174,7 @@ export function CanvasEditor() {
   }, []);
 
   const openTextEditor = useCallback(
-    (canvasX: number, canvasY: number, value: string, color: Bgr | null, target: EditTarget) => {
+    (canvasX: number, canvasY: number, value: string, colour: Bgr | null, target: EditTarget) => {
       const vp = vpRef.current;
       if (!vp) return;
       editTargetRef.current = target;
@@ -184,7 +184,7 @@ export function CanvasEditor() {
         y: canvasY,
         value,
         fontSize: annotationFontSize(vp),
-        color: color ? bgrToCss(color) : "#000000",
+        colour: colour ? bgrToCss(colour) : "#000000",
       });
     },
     [],
@@ -195,7 +195,7 @@ export function CanvasEditor() {
     const value = editRef.current?.value ?? "";
     const store = useEditor.getState();
     if (target?.kind === "new") {
-      if (value.trim() !== "") store.addAnnotation(createText(target.nx, target.ny, value, target.color));
+      if (value.trim() !== "") store.addAnnotation(createText(target.nx, target.ny, value, target.colour));
     } else if (target?.kind === "existing") {
       const ann = store.doc?.annotations.find((a) => a.id === target.id);
       if (ann && ann.type === "text") {
@@ -219,8 +219,8 @@ export function CanvasEditor() {
     curveRef.current = null;
     draftRef.current = null;
     if (points && points.length >= 2) {
-      const color = persistedColor(useEditor.getState().textColor);
-      useEditor.getState().addAnnotation(createCurve(points, color));
+      const colour = persistedColour(useEditor.getState().textColour);
+      useEditor.getState().addAnnotation(createCurve(points, colour));
     }
     draw();
   }, [draw]);
@@ -289,23 +289,23 @@ export function CanvasEditor() {
           return;
         }
         case "text": {
-          const color = persistedColor(store.textColor);
-          openTextEditor(cx, cy, "", color, { kind: "new", nx: norm[0], ny: norm[1], color });
+          const colour = persistedColour(store.textColour);
+          openTextEditor(cx, cy, "", colour, { kind: "new", nx: norm[0], ny: norm[1], colour });
           return;
         }
         case "line": {
-          const color = persistedColor(store.textColor);
+          const colour = persistedColour(store.textColour);
           canvasRef.current?.setPointerCapture(e.pointerId);
-          gestureRef.current = { kind: "line", start: norm, color };
-          draftRef.current = { id: DRAFT_ID, type: "line", color, points: [norm, norm] };
+          gestureRef.current = { kind: "line", start: norm, colour };
+          draftRef.current = { id: DRAFT_ID, type: "line", colour, points: [norm, norm] };
           draw();
           return;
         }
         case "curve": {
-          const color = persistedColor(store.textColor);
+          const colour = persistedColour(store.textColour);
           if (curveRef.current) curveRef.current.push(norm);
           else curveRef.current = [norm];
-          draftRef.current = { id: DRAFT_ID, type: "curve", color, points: [...curveRef.current] };
+          draftRef.current = { id: DRAFT_ID, type: "curve", colour, points: [...curveRef.current] };
           draw();
           return;
         }
@@ -340,7 +340,7 @@ export function CanvasEditor() {
           return;
         }
         if (g.kind === "line") {
-          draftRef.current = { id: DRAFT_ID, type: "line", color: g.color, points: [g.start, norm] };
+          draftRef.current = { id: DRAFT_ID, type: "line", colour: g.colour, points: [g.start, norm] };
         } else if (g.kind === "move") {
           if (Math.hypot(cx - normToCanvas(vp, g.startNorm)[0], cy - normToCanvas(vp, g.startNorm)[1]) > DRAG_THRESHOLD) {
             g.moved = true;
@@ -363,7 +363,7 @@ export function CanvasEditor() {
         draftRef.current = {
           id: DRAFT_ID,
           type: "curve",
-          color: persistedColor(store.textColor),
+          colour: persistedColour(store.textColour),
           points: [...curveRef.current, norm],
         };
         draw();
@@ -401,7 +401,7 @@ export function CanvasEditor() {
         const [c0x, c0y] = normToCanvas(vp, p0);
         const [c1x, c1y] = normToCanvas(vp, p1);
         if (Math.hypot(c1x - c0x, c1y - c0y) > DRAG_THRESHOLD) {
-          store.addAnnotation(createLine(p0, p1, g.color));
+          store.addAnnotation(createLine(p0, p1, g.colour));
         }
         clearDraft();
         draw();
@@ -414,7 +414,7 @@ export function CanvasEditor() {
         } else if (g.original.type === "text") {
           // A click without a drag on a text annotation: edit it.
           const [x, y] = normToCanvas(vp, [g.original.x, g.original.y]);
-          openTextEditor(x, y, g.original.text, g.original.color, { kind: "existing", id: g.id });
+          openTextEditor(x, y, g.original.text, g.original.colour, { kind: "existing", id: g.id });
         }
         clearDraft();
         draw();
@@ -450,7 +450,7 @@ export function CanvasEditor() {
         if (ann && ann.type === "text") {
           store.selectAnnotation(annId);
           const [x, y] = normToCanvas(vp, [ann.x, ann.y]);
-          openTextEditor(x, y, ann.text, ann.color, { kind: "existing", id: annId });
+          openTextEditor(x, y, ann.text, ann.colour, { kind: "existing", id: annId });
         }
         return;
       }
@@ -497,7 +497,7 @@ export function CanvasEditor() {
       // Highlighting.
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "h") {
         e.preventDefault();
-        if (e.shiftKey) colorInputRef.current?.click();
+        if (e.shiftKey) colourInputRef.current?.click();
         else store.toggleHighlight();
         return;
       }
@@ -581,7 +581,7 @@ export function CanvasEditor() {
         />
       )}
       <input
-        ref={colorInputRef}
+        ref={colourInputRef}
         type="color"
         className="hidden-color-input"
         onChange={(e) => useEditor.getState().setHighlight(hexToBgr(e.target.value))}

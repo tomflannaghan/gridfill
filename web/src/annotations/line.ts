@@ -3,7 +3,7 @@
 import { boundsOf, distanceToSegment, type Point } from "../model/geometry.ts";
 import { normToCanvas } from "../canvas/viewport.ts";
 import type { AnnotationKind, Handle } from "./kind.ts";
-import { annotationColor } from "./kind.ts";
+import { annotationColour } from "./kind.ts";
 import { annotationStrokeWidth, handleRadius } from "./sizes.ts";
 import { strokePolyline } from "./stroke.ts";
 import type { LineAnnotation } from "./types.ts";
@@ -11,7 +11,7 @@ import type { LineAnnotation } from "./types.ts";
 export const lineKind: AnnotationKind<LineAnnotation> = {
   render(ctx, vp, a) {
     const pts = a.points.map((p) => normToCanvas(vp, p));
-    strokePolyline(ctx, pts, annotationColor(a.color), annotationStrokeWidth(vp));
+    strokePolyline(ctx, pts, annotationColour(a.colour), annotationStrokeWidth(vp));
   },
 
   hitTest(_ctx, vp, a, cx, cy) {

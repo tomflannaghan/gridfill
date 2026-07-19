@@ -45,6 +45,6 @@ export function isBlack([b, g, r]: Bgr): boolean {
 
 /** The colour to persist for content painted in `bgr`: null for the default
  * black (so untouched documents stay free of colour noise), else a copy. */
-export function persistedColor(bgr: Bgr): Bgr | null {
+export function persistedColour(bgr: Bgr): Bgr | null {
   return isBlack(bgr) ? null : ([...bgr] as Bgr);
 }

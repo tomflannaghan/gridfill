@@ -13,7 +13,7 @@ function square(cx: number, cy: number, s = 0.4): Cell {
     kind: "empty",
     letter: null,
     background: null,
-    textColor: null,
+    textColour: null,
     centre: null,
   };
 }

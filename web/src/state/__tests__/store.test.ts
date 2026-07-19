@@ -25,7 +25,7 @@ function square(cx: number, cy: number): Cell {
     kind: "empty",
     letter: null,
     background: null,
-    textColor: null,
+    textColour: null,
     centre: [cx, cy],
   };
 }
@@ -234,11 +234,11 @@ describe("apply colour to selection", () => {
 
   it("applies to a single selected cell", () => {
     const s = useEditor.getState();
-    s.setTextColor([10, 20, 30]);
+    s.setTextColour([10, 20, 30]);
     s.selectCell(0, 4);
-    s.applyTextColorToSelection();
-    expect(cellOf(4).textColor).toEqual([10, 20, 30]);
-    expect(cellOf(0).textColor).toBeNull();
+    s.applyTextColourToSelection();
+    expect(cellOf(4).textColour).toEqual([10, 20, 30]);
+    expect(cellOf(0).textColour).toBeNull();
   });
 
   it("skips block cells and does nothing without a selection", () => {

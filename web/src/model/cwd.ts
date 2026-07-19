@@ -10,14 +10,14 @@
  *     "grids": [ <grid>, ... ],
  *     "annotations": [
  *       { "type": "text",  "x": x, "y": y, "text": "..." },
- *       { "type": "line",  "points": [[x,y],[x,y]], "color": [b,g,r] },
+ *       { "type": "line",  "points": [[x,y],[x,y]], "colour": [b,g,r] },
  *       { "type": "curve", "points": [[x,y], ...] }
  *     ]
  *   }
  *
  * Coordinates (cell polygon vertices and annotation points) are fractions of the
- * source image's (width, height), in [0, 1]. Cell `background` / `text_color`
- * and an annotation's optional `color` are BGR triples (omitted for the default
+ * source image's (width, height), in [0, 1]. Cell `background` / `text_colour`
+ * and an annotation's optional `colour` are BGR triples (omitted for the default
  * black). An annotation's in-memory `id` is not persisted.
  */
 
@@ -32,11 +32,11 @@ export interface Cell {
   polygon: Point[];
   kind: CellKind;
   letter: string | null;
-  /** OpenCV BGR triple, or null. See model/color.ts. */
+  /** OpenCV BGR triple, or null. See model/colour.ts. */
   background: [number, number, number] | null;
   /** OpenCV BGR triple the cell's letter is drawn in, or null for the default
-   * (black). Persisted as `text_color`. */
-  textColor: [number, number, number] | null;
+   * (black). Persisted as `text_colour`. */
+  textColour: [number, number, number] | null;
   /** The cell's incircle centre (normalized [0,1]), precomputed and persisted
    * by the Python library (`polygon_centre`). Where a glyph sits best and the
    * point navigation treats as the cell's location. Null only for documents
@@ -94,14 +94,14 @@ function parseCell(raw: unknown): Cell {
   }
   const bg = c.background;
   const background = bg == null ? null : asPoint3(bg);
-  const tc = c.text_color;
-  const textColor = tc == null ? null : asPoint3(tc);
+  const tc = c.text_colour;
+  const textColour = tc == null ? null : asPoint3(tc);
   return {
     polygon: (c.polygon as unknown[]).map(asPoint),
     kind,
     letter: c.letter == null ? null : String(c.letter),
     background,
-    textColor,
+    textColour,
     centre: c.centre == null ? null : asPoint(c.centre),
   };
 }
@@ -127,20 +127,20 @@ function parseGrid(raw: unknown): Grid {
 function parseAnnotation(raw: unknown): Annotation {
   if (typeof raw !== "object" || raw === null) throw new CwdParseError("Invalid annotation");
   const o = raw as Record<string, unknown>;
-  const color = o.color == null ? null : asPoint3(o.color);
+  const colour = o.colour == null ? null : asPoint3(o.colour);
   const id = newAnnotationId();
   switch (o.type) {
     case "text":
-      return { id, type: "text", color, x: Number(o.x), y: Number(o.y), text: String(o.text) };
+      return { id, type: "text", colour, x: Number(o.x), y: Number(o.y), text: String(o.text) };
     case "line": {
       const pts = (o.points as unknown[]).map(asPoint);
       if (pts.length < 2) throw new CwdParseError("Line annotation needs two points");
-      return { id, type: "line", color, points: [pts[0]!, pts[1]!] };
+      return { id, type: "line", colour, points: [pts[0]!, pts[1]!] };
     }
     case "curve": {
       const pts = (o.points as unknown[]).map(asPoint);
       if (pts.length < 2) throw new CwdParseError("Curve annotation needs at least two points");
-      return { id, type: "curve", color, points: pts };
+      return { id, type: "curve", colour, points: pts };
     }
     default:
       throw new CwdParseError(`Unknown annotation type: ${String(o.type)}`);
@@ -148,14 +148,14 @@ function parseAnnotation(raw: unknown): Annotation {
 }
 
 function annotationToJson(a: Annotation): unknown {
-  const color = a.color == null ? {} : { color: [...a.color] };
+  const colour = a.colour == null ? {} : { colour: [...a.colour] };
   switch (a.type) {
     case "text":
-      return { type: "text", x: a.x, y: a.y, text: a.text, ...color };
+      return { type: "text", x: a.x, y: a.y, text: a.text, ...colour };
     case "line":
-      return { type: "line", points: a.points.map(([x, y]) => [x, y]), ...color };
+      return { type: "line", points: a.points.map(([x, y]) => [x, y]), ...colour };
     case "curve":
-      return { type: "curve", points: a.points.map(([x, y]) => [x, y]), ...color };
+      return { type: "curve", points: a.points.map(([x, y]) => [x, y]), ...colour };
   }
 }
 
@@ -215,7 +215,7 @@ function gridToJson(grid: Grid): unknown {
     kind: c.kind,
     letter: c.letter,
     background: c.background == null ? null : [...c.background],
-    text_color: c.textColor == null ? null : [...c.textColor],
+    text_colour: c.textColour == null ? null : [...c.textColour],
     centre: c.centre == null ? null : [c.centre[0], c.centre[1]],
   }));
   if (grid.type === "rectangular") {

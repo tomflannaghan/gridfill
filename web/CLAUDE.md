@@ -13,7 +13,7 @@ text editor) but not the grid pixels.
 
 - [src/model/](src/model/) — pure, framework-free logic: `cwd.ts` (the document
   model + parse/serialize, **mirrors Python `document.py`** — keep in sync),
-  `grid.ts` (cell navigation / reading order), `geometry.ts`, `color.ts` (the
+  `grid.ts` (cell navigation / reading order), `geometry.ts`, `colour.ts` (the
   **only** place BGR↔RGB is swapped).
 - [src/state/store.ts](src/state/store.ts) — the zustand store: the loaded doc,
   tool, selection, mode, and every mutation behind an [editor.md](editor.md)

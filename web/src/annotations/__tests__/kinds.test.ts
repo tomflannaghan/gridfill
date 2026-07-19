@@ -12,7 +12,7 @@ const CTX = {} as CanvasRenderingContext2D;
 const line: LineAnnotation = {
   id: "l",
   type: "line",
-  color: null,
+  colour: null,
   points: [
     [0, 0],
     [1, 0],
@@ -22,7 +22,7 @@ const line: LineAnnotation = {
 const curve: CurveAnnotation = {
   id: "c",
   type: "curve",
-  color: null,
+  colour: null,
   points: [
     [0, 0],
     [0.5, 0.5],

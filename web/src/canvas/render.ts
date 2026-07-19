@@ -3,7 +3,7 @@
  */
 
 import { cellCentre, type Cell, type Cwd, type Grid } from "../model/cwd.ts";
-import { bgrToCss } from "../model/color.ts";
+import { bgrToCss } from "../model/colour.ts";
 import { boundingPolygon } from "../model/grid.ts";
 import { boundsOf, polygonCentroid, type Point } from "../model/geometry.ts";
 import { normToCanvas, type Viewport } from "./viewport.ts";
@@ -18,8 +18,8 @@ import { handleRadius } from "../annotations/sizes.ts";
 
 const BLOCK_FILL = "#0d0d0d";
 // Default colour for letters and annotations when they carry no explicit
-// `textColor` (black); an element's own BGR colour overrides it.
-const DEFAULT_TEXT_COLOR = "#000000";
+// `textColour` (black); an element's own BGR colour overrides it.
+const DEFAULT_TEXT_COLOUR = "#000000";
 const ACTIVE_GRID_BORDER = "#2fbf5f";
 const SELECT_STROKE = "#123ec4";
 const MULTI_SELECT_STROKE = "#e07a1f";
@@ -112,7 +112,7 @@ function drawLetter(ctx: CanvasRenderingContext2D, vp: Viewport, cell: Cell): vo
     fontSize *= maxWidth / measured;
     ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
   }
-  ctx.fillStyle = cell.textColor ? bgrToCss(cell.textColor) : DEFAULT_TEXT_COLOR;
+  ctx.fillStyle = cell.textColour ? bgrToCss(cell.textColour) : DEFAULT_TEXT_COLOUR;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(text, cx, cy);
