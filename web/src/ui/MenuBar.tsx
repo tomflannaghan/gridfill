@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { useEditor } from "../state/store.ts";
 import { openCwdFile, saveCwd, exportImage } from "../lib/files.ts";
 import { bgrToHex, hexToBgr } from "../model/color.ts";
+import logoUrl from "../assets/logo.svg";
 
 interface Props {
   onError(message: string): void;
@@ -59,7 +60,10 @@ export function MenuBar({ onError }: Props) {
 
   return (
     <header className="menubar">
-      <span className="brand">Gridfill Editor</span>
+      <span className="brand">
+        <img src={logoUrl} alt="" className="brand-logo" />
+        Gridfill Editor
+      </span>
 
       <button type="button" onClick={() => fileInputRef.current?.click()}>
         Open…
