@@ -1,7 +1,43 @@
 # CLAUDE.md — web frontend
 
-Frontend-specific gotchas. See the repo root `CLAUDE.md` for project-wide
-guidance and [editor.md](editor.md) for the editor's intended behaviour.
+Frontend-specific gotchas. See the repo root [CLAUDE.md](../CLAUDE.md) for
+project-wide conventions (normalized coords, BGR colours, the mirrored `.cwd`
+format) and [editor.md](editor.md) for the editor's intended behaviour. Run
+tooling from `web/`: `npm run dev`, `npm test` (vitest), `npm run typecheck`.
+
+## Architecture
+
+Purely a frontend — a `.cwd` is plain JSON, so no backend is involved. The
+canvas is drawn **imperatively**; React owns the chrome (toolbar, menus, inline
+text editor) but not the grid pixels.
+
+- [src/model/](src/model/) — pure, framework-free logic: `cwd.ts` (the document
+  model + parse/serialize, **mirrors Python `document.py`** — keep in sync),
+  `grid.ts` (cell navigation / reading order), `geometry.ts`, `color.ts` (the
+  **only** place BGR↔RGB is swapped).
+- [src/state/store.ts](src/state/store.ts) — the zustand store: the loaded doc,
+  tool, selection, mode, and every mutation behind an [editor.md](editor.md)
+  interaction. **Undo/redo = whole-document snapshots** pushed onto `past` /
+  `future` (immutable + structurally shared, so snapshots are cheap); a mutation
+  that should be undoable snapshots `doc` before changing it. View-only state
+  (e.g. `zoomToGrid`) is deliberately *not* part of the doc and *not* undoable.
+- [src/canvas/](src/canvas/) — `render.ts` (draws image → grids → annotations),
+  `viewport.ts` (normalized↔canvas-pixel transforms), `hitTest.ts`,
+  `CanvasEditor.tsx` (pointer/keyboard wiring).
+- [src/annotations/](src/annotations/) — the annotation kinds. See below.
+- [src/ui/](src/ui/) — React chrome (`Toolbar`, `MenuBar`, `AnnotationEditor`).
+
+## Adding an annotation kind
+
+Annotations (text/line/curve) are a **registry-driven tagged union**. Every call
+site (renderer, hit-tester, pointer input) goes through the generic helpers in
+[registry.ts](src/annotations/registry.ts), which dispatch on `annotation.type`
+to an `AnnotationKind` implementation ([kind.ts](src/annotations/kind.ts)
+defines the interface: render / hitTest / bounds / handles / moveBy /
+moveHandle). To add a kind: add its variant to `types.ts`, implement an
+`AnnotationKind`, and register it in `registry.ts`'s `KINDS` map — **nothing
+else special-cases a kind**. Also add its JSON case to `cwd.ts` *and* Python
+`document.py` (both sides of the format).
 
 ## React StrictMode + inline editors
 
