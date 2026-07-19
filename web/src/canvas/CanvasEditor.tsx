@@ -548,6 +548,7 @@ export function CanvasEditor() {
           store.backspace();
           return;
         case "Delete":
+          e.preventDefault();
           store.deleteCell();
           return;
       }
