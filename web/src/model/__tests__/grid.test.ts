@@ -60,6 +60,34 @@ describe("neighbor", () => {
   });
 });
 
+describe("neighbor (60-degree cone with angle-penalised scoring)", () => {
+  it("prefers a farther but well-aligned cell over a closer off-axis one", () => {
+    // From the origin, going "right": cell 1 is directly ahead but farther
+    // (distance 1.5, angle 0 -> score 1.5); cell 2 is nearer but 45 degrees
+    // off-axis (distance ~1.414, angle 45 -> score ~2.828). The old
+    // along+lateral scoring picked the nearer-but-diagonal cell (this is the
+    // brickwork case: offset cells in the row above/below are closer than
+    // the true row neighbour but aren't the natural left/right choice).
+    const cells: Cell[] = [
+      square(0, 0), // 0: origin
+      square(1.5, 0), // 1: aligned, farther
+      square(1 / Math.SQRT2, 1 / Math.SQRT2), // 2: 45 degrees off, nearer
+    ];
+    const grid: IrregularGrid = { type: "irregular", cells };
+    expect(neighbor(grid, 0, "right")).toBe(1);
+  });
+
+  it("widens the cone to 60 degrees (a 45-degree cone would miss this cell)", () => {
+    const angle = (50 * Math.PI) / 180;
+    const cells: Cell[] = [
+      square(0, 0), // 0: origin
+      square(Math.cos(angle), Math.sin(angle)), // 1: 50 degrees off-axis
+    ];
+    const grid: IrregularGrid = { type: "irregular", cells };
+    expect(neighbor(grid, 0, "right")).toBe(1);
+  });
+});
+
 describe("reading-order fill navigation", () => {
   it("skips block cells when advancing and stepping back", () => {
     const cells = grid3x3Cells();

@@ -44,8 +44,9 @@ function rectangularNeighbor(
   return null;
 }
 
-/** Nearest cell whose centre lies in `direction` within a 45-degree cone.
- * Ported from `IrregularGrid.neighbor` (the along/lateral scoring is verbatim). */
+/** Nearest cell whose centre lies in `direction` within a 60-degree cone,
+ * scored by `distance * (1 + angle / 45)` so off-axis cells (e.g. the
+ * offset rows of a brickwork grid) lose to a farther but better-aligned one. */
 function irregularNeighbor(
   grid: { cells: Grid["cells"] },
   index: number,
@@ -56,7 +57,7 @@ function irregularNeighbor(
   if (!origin) return null;
   const [ox, oy] = cellCentre(origin);
   let best: number | null = null;
-  let bestScore = 0;
+  let bestScore = Infinity;
   for (let i = 0; i < grid.cells.length; i++) {
     if (i === index) continue;
     const [px, py] = cellCentre(grid.cells[i]!);
@@ -65,9 +66,11 @@ function irregularNeighbor(
     const along = vx * dx + vy * dy;
     if (along <= 0) continue; // behind, or perpendicular to, the direction
     const lateral = Math.abs(vx * dy - vy * dx);
-    if (lateral > along) continue; // outside the 45-degree cone
-    const score = along + lateral; // closest, best-aligned cell wins
-    if (best === null || score < bestScore) {
+    const angle = (Math.atan2(lateral, along) * 180) / Math.PI;
+    if (angle > 60) continue; // outside the 60-degree cone
+    const distance = Math.hypot(vx, vy);
+    const score = distance * (1 + angle / 45);
+    if (score < bestScore) {
       best = i;
       bestScore = score;
     }
