@@ -233,6 +233,31 @@ describe("apply colour to selection", () => {
     expect(cellOf(1).background).toBeNull();
   });
 
+  it("applies the highlight to the selection, then clears it on a second call", () => {
+    const s = useEditor.getState();
+    s.selectCell(0, 0);
+    s.extendSelection("right"); // cells 0, 1
+
+    s.applyOrClearHighlightToSelection();
+    expect(cellOf(0).background).toEqual(s.highlight);
+    expect(cellOf(1).background).toEqual(s.highlight);
+
+    s.applyOrClearHighlightToSelection();
+    expect(cellOf(0).background).toBeNull();
+    expect(cellOf(1).background).toBeNull();
+  });
+
+  it("re-applies the highlight (rather than clearing) when only some selected cells match it", () => {
+    const s = useEditor.getState();
+    s.selectCell(0, 0);
+    s.applyHighlightToSelection(); // cell 0 already highlighted
+    s.extendSelection("right"); // cells 0, 1 selected; cell 1 unhighlighted
+
+    s.applyOrClearHighlightToSelection();
+    expect(cellOf(0).background).toEqual(s.highlight);
+    expect(cellOf(1).background).toEqual(s.highlight);
+  });
+
   it("applies to a single selected cell", () => {
     const s = useEditor.getState();
     s.setTextColour([10, 20, 30]);

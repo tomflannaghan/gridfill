@@ -1,20 +1,13 @@
 /** Top bar: an icon-only toolbar — file actions (Open / Save / Export), the
- * annotation tool palette, the text/highlight colour swatches with a clear-
- * highlight button, and the "zoom to grid" view toggle. */
+ * annotation tool palette, the text/highlight colour pills, and the "zoom to
+ * grid" view toggle. */
 
 import { useEffect, useRef, useState } from "react";
 import { useEditor } from "../state/store.ts";
 import { openCwdFile, saveCwd, exportImage } from "../lib/files.ts";
 import { detectFromImage } from "../lib/backend.ts";
 import { bgrToHex, contrastFg, hexToBgr } from "../model/colour.ts";
-import {
-  IconFolderOpen,
-  IconSave,
-  IconDownload,
-  IconPaintBucket,
-  IconSlashCircle,
-  IconAspectRatio,
-} from "./icons.tsx";
+import { IconFolderOpen, IconSave, IconDownload, IconPaintBucket, IconAspectRatio } from "./icons.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import logoUrl from "../assets/logo.svg";
 
@@ -35,7 +28,9 @@ export function MenuBar({ onError }: Props) {
   const dirty = useEditor((s) => s.dirty);
   const selection = useEditor((s) => s.selection);
   const selectedCells = useEditor((s) => s.selectedCells);
+  const selectedAnnotationId = useEditor((s) => s.selectedAnnotationId);
   const hasSelection = selection !== null || selectedCells.length > 0;
+  const hasTextTarget = hasSelection || selectedAnnotationId !== null;
 
   // Picking a colour applies it to the current selection immediately, in
   // addition to becoming the colour used for subsequent typing/annotations.
@@ -136,18 +131,28 @@ export function MenuBar({ onError }: Props) {
 
       <span className="menubar-divider" />
 
-      <button
-        type="button"
-        className="colour-swatch"
-        style={{ background: bgrToHex(textColour), color: contrastFg(textColour) }}
-        title="Text colour — applies to the current selection"
-        aria-label="Text colour"
-        onClick={() => textColourInputRef.current?.click()}
-      >
-        <span className="colour-swatch-glyph" aria-hidden="true">
-          T
-        </span>
-      </button>
+      <div className="colour-pill">
+        <button
+          type="button"
+          className="colour-pill-apply"
+          disabled={!hasTextTarget}
+          onClick={() => useEditor.getState().applyTextColourToSelection()}
+          title="Apply text colour to the current selection"
+          aria-label="Apply text colour"
+        >
+          <span className="colour-swatch-glyph" aria-hidden="true">
+            T
+          </span>
+        </button>
+        <button
+          type="button"
+          className="colour-pill-swatch"
+          style={{ background: bgrToHex(textColour), color: contrastFg(textColour) }}
+          title="Choose text colour"
+          aria-label="Choose text colour"
+          onClick={() => textColourInputRef.current?.click()}
+        />
+      </div>
       <input
         ref={textColourInputRef}
         type="color"
@@ -156,16 +161,26 @@ export function MenuBar({ onError }: Props) {
         onChange={(e) => useEditor.getState().setTextColour(hexToBgr(e.target.value))}
       />
 
-      <button
-        type="button"
-        className="colour-swatch"
-        style={{ background: bgrToHex(highlight), color: contrastFg(highlight) }}
-        title="Highlight (cell background) colour — applies to the current selection"
-        aria-label="Highlight colour"
-        onClick={() => highlightInputRef.current?.click()}
-      >
-        <IconPaintBucket />
-      </button>
+      <div className="colour-pill">
+        <button
+          type="button"
+          className="colour-pill-apply"
+          disabled={!hasSelection}
+          onClick={() => useEditor.getState().applyOrClearHighlightToSelection()}
+          title="Apply highlight to the current selection, or clear it if already applied"
+          aria-label="Apply or clear highlight"
+        >
+          <IconPaintBucket />
+        </button>
+        <button
+          type="button"
+          className="colour-pill-swatch"
+          style={{ background: bgrToHex(highlight), color: contrastFg(highlight) }}
+          title="Choose highlight colour"
+          aria-label="Choose highlight colour"
+          onClick={() => highlightInputRef.current?.click()}
+        />
+      </div>
       <input
         ref={highlightInputRef}
         type="color"
@@ -173,17 +188,6 @@ export function MenuBar({ onError }: Props) {
         value={bgrToHex(highlight)}
         onChange={(e) => useEditor.getState().setHighlight(hexToBgr(e.target.value))}
       />
-
-      <button
-        type="button"
-        className="icon-btn"
-        disabled={!hasSelection}
-        onClick={() => useEditor.getState().clearHighlightFromSelection()}
-        title="Clear highlight — removes the background of the current selection"
-        aria-label="Clear highlight"
-      >
-        <IconSlashCircle />
-      </button>
 
       <span className="menubar-divider" />
 

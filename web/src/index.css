@@ -93,22 +93,49 @@ body {
   color: var(--accent);
 }
 
-/* Highlight / text colour swatches: a coloured square (the current colour)
- * with a foreground glyph — paint bucket for the cell background, "T" for
- * text — that opens the hidden native colour input on click. */
-.colour-swatch {
+/* Highlight / text colour pills: a split button. The LHS (icon: paint bucket
+ * for the cell background, "T" for text) applies the current colour to the
+ * selection; the RHS shows that colour and opens the hidden native colour
+ * input on click to change it. */
+.colour-pill {
+  display: inline-flex;
+  align-items: stretch;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  overflow: hidden;
+}
+
+.colour-pill-apply {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
   padding: 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  color: var(--fg);
+  background: #ffffff;
+  border: none;
   cursor: pointer;
 }
 
-.colour-swatch:hover {
+.colour-pill-apply:hover:not(:disabled) {
+  background: #e8e8e8;
+}
+
+.colour-pill-apply:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.colour-pill-swatch {
+  width: 18px;
+  padding: 0;
+  border: none;
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.colour-pill-swatch:hover {
   box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.15) inset;
 }
 

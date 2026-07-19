@@ -9,7 +9,7 @@ import type { Cell, Cwd, Grid } from "../model/cwd.ts";
 import type { Annotation } from "../annotations/types.ts";
 import { neighbor, nextFillable, prevFillable, type Direction } from "../model/grid.ts";
 import { cellsInRect } from "../canvas/hitTest.ts";
-import { DEFAULT_HIGHLIGHT_BGR, DEFAULT_TEXT_BGR, persistedColour, type Bgr } from "../model/colour.ts";
+import { DEFAULT_HIGHLIGHT_BGR, DEFAULT_TEXT_BGR, bgrEqual, persistedColour, type Bgr } from "../model/colour.ts";
 import { DEFAULT_TEXT_ANNOTATION_SIZE, defaultTextAnnotationSize } from "../annotations/sizes.ts";
 
 export interface Selection {
@@ -86,6 +86,10 @@ export interface EditorState {
   applyHighlightToSelection(): void;
   /** Remove the background of every selected cell. */
   clearHighlightFromSelection(): void;
+  /** Apply the current highlight colour to every selected cell, unless every
+   * selected (non-block) cell already has that exact background — in which
+   * case clear it instead. Backs the highlight pill's LHS button. */
+  applyOrClearHighlightToSelection(): void;
   /** Apply the current text colour to every selected cell's letter. */
   applyTextColourToSelection(): void;
   /** Apply the current text size to the selected text annotation, if any. */
@@ -387,6 +391,25 @@ export const useEditor = create<EditorState>((set, get) => {
       const targets = selectionTargets();
       if (!doc || targets.length === 0) return;
       set(commit(withCells(doc, targets, (c) => ({ ...c, background: null }))));
+    },
+
+    applyOrClearHighlightToSelection() {
+      const { doc, highlight } = get();
+      const targets = selectionTargets();
+      if (!doc || targets.length === 0) return;
+      const cells = targets
+        .map((t) => cellAt(doc, t))
+        .filter((c): c is Cell => c !== null && c.kind !== "block");
+      if (cells.length === 0) return;
+      const allHighlighted = cells.every((c) => c.background !== null && bgrEqual(c.background, highlight));
+      set(
+        commit(
+          withCells(doc, targets, (c) => ({
+            ...c,
+            background: allHighlighted ? null : ([...highlight] as Bgr),
+          })),
+        ),
+      );
     },
 
     applyTextColourToSelection() {

@@ -49,6 +49,11 @@ export function persistedColour(bgr: Bgr): Bgr | null {
   return isBlack(bgr) ? null : ([...bgr] as Bgr);
 }
 
+/** True if two BGR triples represent the same colour. */
+export function bgrEqual(a: Bgr, b: Bgr): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
 /** A readable foreground (black or white) for an icon/glyph drawn over a swatch
  * filled with `bgr`, picked by perceptual luminance. */
 export function contrastFg([b, g, r]: Bgr): string {

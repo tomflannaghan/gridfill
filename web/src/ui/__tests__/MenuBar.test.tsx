@@ -88,15 +88,28 @@ describe("MenuBar colour pickers", () => {
     expect(useEditor.getState().doc!.annotations[0]!.colour).toEqual([255, 0, 0]);
   });
 
-  it("clears the highlight of the selected cell via the Clear highlight button", () => {
+  it("applies the highlight via the pill's apply button, then clears it on a second click", () => {
     const s = useEditor.getState();
     s.selectCell(0, 0);
-    s.applyHighlightToSelection();
-    expect(useEditor.getState().doc!.grids[0]!.cells[0]!.background).not.toBeNull();
 
     const { getByRole } = render(<MenuBar onError={() => {}} />);
-    fireEvent.click(getByRole("button", { name: "Clear highlight" }));
+    const applyHighlight = getByRole("button", { name: "Apply or clear highlight" });
 
+    fireEvent.click(applyHighlight);
+    expect(useEditor.getState().doc!.grids[0]!.cells[0]!.background).toEqual(s.highlight);
+
+    fireEvent.click(applyHighlight);
     expect(useEditor.getState().doc!.grids[0]!.cells[0]!.background).toBeNull();
+  });
+
+  it("applies the text colour via the pill's apply button", () => {
+    const s = useEditor.getState();
+    s.setTextColour([10, 20, 30]);
+    s.selectCell(0, 0);
+
+    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    fireEvent.click(getByRole("button", { name: "Apply text colour" }));
+
+    expect(useEditor.getState().doc!.grids[0]!.cells[0]!.textColour).toEqual([10, 20, 30]);
   });
 });
