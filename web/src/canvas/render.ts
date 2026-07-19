@@ -6,7 +6,7 @@ import { cellCentre, type Cell, type Cwd, type Grid } from "../model/cwd.ts";
 import { bgrToCss } from "../model/colour.ts";
 import { boundingPolygon } from "../model/grid.ts";
 import { boundsOf, polygonCentroid, type Point } from "../model/geometry.ts";
-import { normToCanvas, type Viewport } from "./viewport.ts";
+import { imageToCanvas, imageLengthToCanvas, type Viewport } from "./viewport.ts";
 import type { Selection, Tool } from "../state/store.ts";
 import type { Annotation } from "../annotations/types.ts";
 import {
@@ -32,7 +32,8 @@ export interface Scene {
   selection: Selection | null;
   /** Cells in a multi-cell selection, drawn highlighted (chrome only). */
   selectedCells?: Selection[];
-  /** Live marquee rectangle [startNorm, currentNorm] while dragging (chrome only). */
+  /** Live marquee rectangle [start, current] (source-image pixels) while
+   * dragging (chrome only). */
   marquee?: [Point, Point] | null;
   mode: "normal" | "multiEntry";
   /** Draw selection / active-grid chrome. False for image export. */
@@ -68,7 +69,7 @@ export function renderScene(ctx: CanvasRenderingContext2D, scene: Scene): void {
 function pathPolygon(ctx: CanvasRenderingContext2D, vp: Viewport, polygon: Point[]): void {
   ctx.beginPath();
   polygon.forEach((p, i) => {
-    const [x, y] = normToCanvas(vp, p);
+    const [x, y] = imageToCanvas(vp, p);
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   });
@@ -97,14 +98,19 @@ function drawCell(ctx: CanvasRenderingContext2D, vp: Viewport, cell: Cell): void
 }
 
 function drawLetter(ctx: CanvasRenderingContext2D, vp: Viewport, cell: Cell): void {
-  const canvasPts = cell.polygon.map((p) => normToCanvas(vp, p));
+  const canvasPts = cell.polygon.map((p) => imageToCanvas(vp, p));
   const [minX, minY, maxX, maxY] = boundsOf(canvasPts);
   const w = maxX - minX;
   const h = maxY - minY;
-  const [cx, cy] = normToCanvas(vp, cellCentre(cell));
+  const [cx, cy] = imageToCanvas(vp, cellCentre(cell));
   const text = cell.letter ?? "";
 
-  let fontSize = Math.min(w, h) * 0.62;
+  // Prefer the precomputed incircle diameter (persisted by the Python
+  // library) over the polygon's bounding box, which overstates the room
+  // available for a glyph in a non-rectangular cell. Older documents lacking
+  // `size` fall back to the bounding box.
+  const diameter = cell.size != null ? imageLengthToCanvas(vp, cell.size) : Math.min(w, h);
+  let fontSize = diameter * 0.62;
   ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
   const measured = ctx.measureText(text).width;
   const maxWidth = w * 0.82;
@@ -148,7 +154,7 @@ function drawAnnotationSelection(ctx: CanvasRenderingContext2D, scene: Scene): v
 
   const r = handleRadius(vp) * 0.7;
   for (const h of annotationHandles(a)) {
-    const [x, y] = normToCanvas(vp, h.point);
+    const [x, y] = imageToCanvas(vp, h.point);
     ctx.beginPath();
     ctx.rect(x - r, y - r, 2 * r, 2 * r);
     ctx.fillStyle = "#ffffff";
@@ -203,8 +209,8 @@ function drawChrome(ctx: CanvasRenderingContext2D, scene: Scene): void {
 function drawMarquee(ctx: CanvasRenderingContext2D, scene: Scene): void {
   const { viewport: vp, marquee } = scene;
   if (!marquee) return;
-  const [ax, ay] = normToCanvas(vp, marquee[0]);
-  const [bx, by] = normToCanvas(vp, marquee[1]);
+  const [ax, ay] = imageToCanvas(vp, marquee[0]);
+  const [bx, by] = imageToCanvas(vp, marquee[1]);
   const x = Math.min(ax, bx);
   const y = Math.min(ay, by);
   const w = Math.abs(bx - ax);

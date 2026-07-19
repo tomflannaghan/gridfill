@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypeVar
 
-from .geometry import convex_hull, polygon_centre
+from .geometry import convex_hull, polygon_incircle
 
 Point = tuple[float, float]
 
@@ -47,19 +47,23 @@ class BoundingBox:
 class Cell:
     """A single grid cell: its shape on the source image, kind, and content.
 
-    ``polygon`` is the ordered list of the cell's vertices as (x, y) fractions
-    of the *source* image's (width, height) -- i.e. the image originally
-    passed to grid detection, not any internal rectified intermediate. For a
-    rectangular cell this is always 4 points in
+    ``polygon`` is the ordered list of the cell's vertices as (x, y) pixel
+    coordinates of the *source* image -- i.e. the image originally passed to
+    grid detection, not any internal rectified intermediate. For a rectangular
+    cell this is always 4 points in
     ``[top-left, top-right, bottom-right, bottom-left]`` order. A cell carries
     no row/col of its own -- its position within a grid is purely a function
     of where it sits in the owning :class:`Grid`'s ``cells`` list.
 
-    ``centre`` is the cell's incircle centre (see
-    :func:`gridfill.geometry.polygon_centre`), in the same normalized ``[0, 1]``
-    space as ``polygon``. It is derived from ``polygon`` and cached here so it
-    is computed once and persisted to the document -- consumers (e.g. the web
-    editor) read it directly instead of recomputing the distance transform.
+    ``centre`` is the cell's incircle centre and ``size`` its incircle
+    *diameter* (see :func:`gridfill.geometry.polygon_incircle`), both in the
+    same source-image pixel space as ``polygon``. Both are derived from
+    ``polygon`` and cached here so they are computed once and persisted to the
+    document -- consumers (e.g. the web editor) read them directly instead of
+    recomputing the distance transform. In particular, ``size`` is the basis
+    for the web editor's letter font size, so a cell always renders its glyph
+    at a consistent size without the frontend needing to know about incircles
+    at all.
 
     ``text_colour`` is the BGR colour the cell's ``letter`` is drawn in; ``None``
     means the editor's default (black).
@@ -70,13 +74,20 @@ class Cell:
     letter: str | None = None
     background: tuple[int, int, int] | None = None
     centre: Point | None = None
+    size: float | None = None
     text_colour: tuple[int, int, int] | None = None
 
     def __post_init__(self) -> None:
-        # Derive the centre once from the polygon (a genuine cell has >= 3
-        # vertices); an already-supplied centre (e.g. from ``from_dict``) wins.
-        if self.centre is None and len(self.polygon) >= 3:
-            self.centre = polygon_centre(self.polygon)
+        # Derive centre and size together from the polygon's incircle (a
+        # genuine cell has >= 3 vertices) -- one distance transform gives both.
+        # An already-supplied value (e.g. from ``from_dict``) wins over the
+        # freshly computed one, independently for each.
+        if (self.centre is None or self.size is None) and len(self.polygon) >= 3:
+            centre, size = polygon_incircle(self.polygon)
+            if self.centre is None:
+                self.centre = centre
+            if self.size is None:
+                self.size = size
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -85,6 +96,7 @@ class Cell:
             "letter": self.letter,
             "background": list(self.background) if self.background is not None else None,
             "centre": list(self.centre) if self.centre is not None else None,
+            "size": self.size,
             "text_colour": list(self.text_colour) if self.text_colour is not None else None,
         }
 
@@ -92,6 +104,7 @@ class Cell:
     def from_dict(cls, data: dict[str, Any]) -> Cell:
         bg = data["background"]
         centre = data.get("centre")
+        size = data.get("size")
         tc = data.get("text_colour")
         return cls(
             polygon=[(float(x), float(y)) for x, y in data["polygon"]],
@@ -99,6 +112,7 @@ class Cell:
             letter=data["letter"],
             background=(int(bg[0]), int(bg[1]), int(bg[2])) if bg is not None else None,
             centre=(float(centre[0]), float(centre[1])) if centre is not None else None,
+            size=float(size) if size is not None else None,
             text_colour=(int(tc[0]), int(tc[1]), int(tc[2])) if tc is not None else None,
         )
 
@@ -116,7 +130,7 @@ class Grid(ABC):
 
     @abstractmethod
     def bounding_polygon(self) -> list[Point]:
-        """The grid's own outer boundary, in the same normalized coordinate
+        """The grid's own outer boundary, in the same source-image pixel
         space as :attr:`Cell.polygon`."""
 
     @abstractmethod

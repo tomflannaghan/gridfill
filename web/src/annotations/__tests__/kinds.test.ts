@@ -15,7 +15,7 @@ const line: LineAnnotation = {
   colour: null,
   points: [
     [0, 0],
-    [1, 0],
+    [100, 0],
   ],
 };
 
@@ -25,8 +25,8 @@ const curve: CurveAnnotation = {
   colour: null,
   points: [
     [0, 0],
-    [0.5, 0.5],
-    [1, 0],
+    [50, 50],
+    [100, 0],
   ],
 };
 
@@ -37,18 +37,18 @@ describe("lineKind", () => {
   });
 
   it("moves both endpoints together", () => {
-    const moved = lineKind.moveBy(line, 0.1, 0.2);
+    const moved = lineKind.moveBy(line, 10, 20);
     expect(moved.points).toEqual([
-      [0.1, 0.2],
-      [1.1, 0.2],
+      [10, 20],
+      [110, 20],
     ]);
   });
 
   it("moves a single endpoint by handle id", () => {
-    const moved = lineKind.moveHandle(line, "1", [0.5, 0.5]);
+    const moved = lineKind.moveHandle(line, "1", [50, 50]);
     expect(moved.points).toEqual([
       [0, 0],
-      [0.5, 0.5],
+      [50, 50],
     ]);
   });
 
@@ -64,8 +64,8 @@ describe("curveKind", () => {
   });
 
   it("moves an anchor by handle id and leaves others put", () => {
-    const moved = curveKind.moveHandle(curve, "1", [0.6, 0.1]);
-    expect(moved.points[1]).toEqual([0.6, 0.1]);
+    const moved = curveKind.moveHandle(curve, "1", [60, 10]);
+    expect(moved.points[1]).toEqual([60, 10]);
     expect(moved.points[0]).toEqual([0, 0]);
   });
 });

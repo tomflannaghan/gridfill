@@ -3,8 +3,8 @@
  * An annotation is free content drawn on top of the grid (text, lines, curves).
  * Every kind carries a stable in-memory `id` (used for selection and editing;
  * regenerated on load, never persisted) and an optional BGR `colour` (null = the
- * editor's default black). All coordinates are normalized [0,1] fractions of the
- * source image, like cell polygons — see CLAUDE.md and model/cwd.ts.
+ * editor's default black). All coordinates are source-image pixel positions,
+ * like cell polygons — see CLAUDE.md and model/cwd.ts.
  *
  * Adding a new kind is deliberately cheap: add a variant here, a module under
  * annotations/ implementing `AnnotationKind`, register it in registry.ts, and add

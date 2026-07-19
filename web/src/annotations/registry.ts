@@ -3,7 +3,7 @@
  * so adding a kind means registering it here — nothing else special-cases it. */
 
 import type { Point } from "../model/geometry.ts";
-import { normToCanvas, type Viewport } from "../canvas/viewport.ts";
+import { imageToCanvas, type Viewport } from "../canvas/viewport.ts";
 import type { Cwd } from "../model/cwd.ts";
 import type { AnnotationKind, Handle } from "./kind.ts";
 import { handleRadius } from "./sizes.ts";
@@ -74,7 +74,7 @@ export function hitTestHandle(
 ): string | null {
   const r = handleRadius(vp);
   for (const h of annotationHandles(a)) {
-    const [hx, hy] = normToCanvas(vp, h.point);
+    const [hx, hy] = imageToCanvas(vp, h.point);
     if (Math.hypot(cx - hx, cy - hy) <= r) return h.id;
   }
   return null;

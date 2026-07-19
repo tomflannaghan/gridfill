@@ -2,7 +2,7 @@
  * geometry handles — it is moved by dragging its body and its text is edited via
  * the inline editor (double-click). */
 
-import { normToCanvas } from "../canvas/viewport.ts";
+import { imageToCanvas } from "../canvas/viewport.ts";
 import type { AnnotationKind } from "./kind.ts";
 import { annotationColour } from "./kind.ts";
 import { annotationFontSize } from "./sizes.ts";
@@ -19,7 +19,7 @@ export const textKind: AnnotationKind<TextAnnotation> = {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillStyle = annotationColour(a.colour);
-    const [x, y] = normToCanvas(vp, [a.x, a.y]);
+    const [x, y] = imageToCanvas(vp, [a.x, a.y]);
     ctx.fillText(a.text, x, y);
   },
 
@@ -31,7 +31,7 @@ export const textKind: AnnotationKind<TextAnnotation> = {
   bounds(ctx, vp, a) {
     const fontSize = annotationFontSize(vp);
     ctx.font = textFont(fontSize);
-    const [x, y] = normToCanvas(vp, [a.x, a.y]);
+    const [x, y] = imageToCanvas(vp, [a.x, a.y]);
     return [x, y, ctx.measureText(a.text).width, fontSize];
   },
 

@@ -24,7 +24,7 @@ _OVERLAP_FRACTION = 0.3
 
 
 def _bounding_box(grid: Grid) -> tuple[float, float, float, float]:
-    """Axis-aligned (x0, y0, x1, y1) of a grid, in normalized source coords."""
+    """Axis-aligned (x0, y0, x1, y1) of a grid, in source-image pixel coords."""
     points = grid.bounding_polygon()
     xs = [x for x, _ in points]
     ys = [y for _, y in points]

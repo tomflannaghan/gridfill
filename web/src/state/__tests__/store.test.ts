@@ -4,7 +4,7 @@ import type { Cell, Cwd } from "../../model/cwd.ts";
 import { createLine, createText } from "../../annotations/types.ts";
 
 function emptyDoc(): Cwd {
-  return { format: "gridfill", version: 1, image: { encoding: "png", data: "" }, grids: [], annotations: [] };
+  return { format: "gridfill", version: 2, image: { encoding: "png", data: "" }, grids: [], annotations: [] };
 }
 
 function loadEmpty(): void {
@@ -14,7 +14,7 @@ function loadEmpty(): void {
 }
 
 function square(cx: number, cy: number): Cell {
-  const s = 0.4;
+  const s = 40;
   return {
     polygon: [
       [cx - s, cy - s],
@@ -27,17 +27,18 @@ function square(cx: number, cy: number): Cell {
     background: null,
     textColour: null,
     centre: [cx, cy],
+    size: null,
   };
 }
 
 function doc3x3(): Cwd {
   const cells: Cell[] = [];
   for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 3; col++) cells.push(square(col, row));
+    for (let col = 0; col < 3; col++) cells.push(square(col * 100, row * 100));
   }
   return {
     format: "gridfill",
-    version: 1,
+    version: 2,
     image: { encoding: "png", data: "" },
     grids: [{ type: "rectangular", rows: 3, cols: 3, cells }],
     annotations: [],
@@ -63,7 +64,7 @@ describe("annotation CRUD", () => {
 
   it("adds, updates and deletes by id", () => {
     const s = useEditor.getState();
-    const text = createText(0.1, 0.2, "hi", null);
+    const text = createText(10, 20, "hi", null);
     s.addAnnotation(text);
     expect(useEditor.getState().doc!.annotations).toHaveLength(1);
 
@@ -76,7 +77,7 @@ describe("annotation CRUD", () => {
 
   it("clears the annotation selection when its annotation is deleted", () => {
     const s = useEditor.getState();
-    const line = createLine([0, 0], [1, 1], null);
+    const line = createLine([0, 0], [100, 100], null);
     s.addAnnotation(line);
     s.selectAnnotation(line.id);
     expect(useEditor.getState().selectedAnnotationId).toBe(line.id);
@@ -87,7 +88,7 @@ describe("annotation CRUD", () => {
   it("deselects cells when an annotation is selected for editing", () => {
     loadGrid();
     const s = useEditor.getState();
-    const line = createLine([0, 0], [1, 1], null);
+    const line = createLine([0, 0], [100, 100], null);
     s.addAnnotation(line);
     s.selectCell(0, 0);
     s.extendSelection("right"); // multi-cell selection
@@ -103,7 +104,7 @@ describe("undo / redo", () => {
 
   it("undoes and redoes an annotation add", () => {
     const s = useEditor.getState();
-    s.addAnnotation(createText(0.1, 0.2, "hi", null));
+    s.addAnnotation(createText(10, 20, "hi", null));
     expect(useEditor.getState().doc!.annotations).toHaveLength(1);
 
     s.undo();
@@ -150,7 +151,7 @@ describe("tools", () => {
 
   it("switching tool clears the annotation selection", () => {
     const s = useEditor.getState();
-    const line = createLine([0, 0], [1, 1], null);
+    const line = createLine([0, 0], [100, 100], null);
     s.addAnnotation(line);
     s.selectAnnotation(line.id);
     s.setTool("line");
@@ -205,7 +206,7 @@ describe("multi-cell selection", () => {
 
   it("selectCellsInRect selects cells with a vertex in the rectangle", () => {
     const s = useEditor.getState();
-    s.selectCellsInRect([-0.5, -0.5, 2.5, 0.5]); // top row
+    s.selectCellsInRect([-50, -50, 250, 50]); // top row
     expect(cellIndices()).toEqual([0, 1, 2]);
     expect(useEditor.getState().selection).toEqual({ gridIndex: 0, cellIndex: 0 });
   });
@@ -249,7 +250,7 @@ describe("apply colour to selection", () => {
       const grids = [{ ...st.doc!.grids[0]!, cells }];
       return { doc: { ...st.doc!, grids } };
     });
-    s.selectCellsInRect([-0.5, -0.5, 2.5, 0.5]);
+    s.selectCellsInRect([-50, -50, 250, 50]);
     s.applyHighlightToSelection();
     expect(cellOf(1).background).toBeNull(); // block untouched
     expect(cellOf(0).background).not.toBeNull();

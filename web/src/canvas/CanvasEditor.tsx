@@ -11,10 +11,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, type Selection } from "../state/store.ts";
 import { renderScene } from "./render.ts";
 import {
-  canvasToNorm,
+  canvasToImage,
   computeViewport,
   computeViewportForRegion,
-  normToCanvas,
+  imageToCanvas,
   type Viewport,
 } from "./viewport.ts";
 import { hitTestCell } from "./hitTest.ts";
@@ -54,15 +54,15 @@ const CURSOR: Record<string, string> = {
 
 /** Where an open text editor writes to: a new annotation or an existing one. */
 type EditTarget =
-  | { kind: "new"; nx: number; ny: number; colour: Bgr | null }
+  | { kind: "new"; x: number; y: number; colour: Bgr | null }
   | { kind: "existing"; id: string };
 
 /** An in-progress pointer drag (select/line tools). */
 type Gesture =
   | { kind: "line"; start: Point; colour: Bgr | null }
-  | { kind: "move"; id: string; original: Annotation; startNorm: Point; moved: boolean }
+  | { kind: "move"; id: string; original: Annotation; startPoint: Point; moved: boolean }
   | { kind: "handle"; id: string; handleId: string; original: Annotation; moved: boolean }
-  | { kind: "marquee"; startNorm: Point; startCanvas: Point; cellHit: Selection | null; moved: boolean };
+  | { kind: "marquee"; startPoint: Point; startCanvas: Point; cellHit: Selection | null; moved: boolean };
 
 export function CanvasEditor() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -89,7 +89,8 @@ export function CanvasEditor() {
   const curveRef = useRef<Point[] | null>(null);
   const draftRef = useRef<Annotation | null>(null);
   const hiddenIdRef = useRef<string | null>(null);
-  // Live marquee rectangle [startNorm, currentNorm] while dragging a selection box.
+  // Live marquee rectangle [start, current] (source-image pixels) while
+  // dragging a selection box.
   const marqueeRef = useRef<[Point, Point] | null>(null);
 
   // (Re)size the canvas to its container and draw the current scene.
@@ -195,7 +196,7 @@ export function CanvasEditor() {
     const value = editRef.current?.value ?? "";
     const store = useEditor.getState();
     if (target?.kind === "new") {
-      if (value.trim() !== "") store.addAnnotation(createText(target.nx, target.ny, value, target.colour));
+      if (value.trim() !== "") store.addAnnotation(createText(target.x, target.y, value, target.colour));
     } else if (target?.kind === "existing") {
       const ann = store.doc?.annotations.find((a) => a.id === target.id);
       if (ann && ann.type === "text") {
@@ -240,7 +241,7 @@ export function CanvasEditor() {
       if (edit) commitEdit();
       const cx = e.nativeEvent.offsetX;
       const cy = e.nativeEvent.offsetY;
-      const norm = canvasToNorm(vp, cx, cy);
+      const pt = canvasToImage(vp, cx, cy);
 
       switch (store.tool) {
         case "select": {
@@ -270,7 +271,7 @@ export function CanvasEditor() {
               kind: "move",
               id: annId,
               original: ann,
-              startNorm: norm,
+              startPoint: pt,
               moved: false,
             };
             return;
@@ -281,7 +282,7 @@ export function CanvasEditor() {
           canvasRef.current?.setPointerCapture(e.pointerId);
           gestureRef.current = {
             kind: "marquee",
-            startNorm: norm,
+            startPoint: pt,
             startCanvas: [cx, cy],
             cellHit: cell,
             moved: false,
@@ -290,21 +291,21 @@ export function CanvasEditor() {
         }
         case "text": {
           const colour = persistedColour(store.textColour);
-          openTextEditor(cx, cy, "", colour, { kind: "new", nx: norm[0], ny: norm[1], colour });
+          openTextEditor(cx, cy, "", colour, { kind: "new", x: pt[0], y: pt[1], colour });
           return;
         }
         case "line": {
           const colour = persistedColour(store.textColour);
           canvasRef.current?.setPointerCapture(e.pointerId);
-          gestureRef.current = { kind: "line", start: norm, colour };
-          draftRef.current = { id: DRAFT_ID, type: "line", colour, points: [norm, norm] };
+          gestureRef.current = { kind: "line", start: pt, colour };
+          draftRef.current = { id: DRAFT_ID, type: "line", colour, points: [pt, pt] };
           draw();
           return;
         }
         case "curve": {
           const colour = persistedColour(store.textColour);
-          if (curveRef.current) curveRef.current.push(norm);
-          else curveRef.current = [norm];
+          if (curveRef.current) curveRef.current.push(pt);
+          else curveRef.current = [pt];
           draftRef.current = { id: DRAFT_ID, type: "curve", colour, points: [...curveRef.current] };
           draw();
           return;
@@ -325,7 +326,7 @@ export function CanvasEditor() {
       if (!vp) return;
       const cx = e.nativeEvent.offsetX;
       const cy = e.nativeEvent.offsetY;
-      const norm = canvasToNorm(vp, cx, cy);
+      const pt = canvasToImage(vp, cx, cy);
       const g = gestureRef.current;
 
       if (g) {
@@ -334,23 +335,23 @@ export function CanvasEditor() {
             g.moved = true;
           }
           if (g.moved) {
-            marqueeRef.current = [g.startNorm, norm];
+            marqueeRef.current = [g.startPoint, pt];
             draw();
           }
           return;
         }
         if (g.kind === "line") {
-          draftRef.current = { id: DRAFT_ID, type: "line", colour: g.colour, points: [g.start, norm] };
+          draftRef.current = { id: DRAFT_ID, type: "line", colour: g.colour, points: [g.start, pt] };
         } else if (g.kind === "move") {
-          if (Math.hypot(cx - normToCanvas(vp, g.startNorm)[0], cy - normToCanvas(vp, g.startNorm)[1]) > DRAG_THRESHOLD) {
+          if (Math.hypot(cx - imageToCanvas(vp, g.startPoint)[0], cy - imageToCanvas(vp, g.startPoint)[1]) > DRAG_THRESHOLD) {
             g.moved = true;
           }
-          draftRef.current = moveAnnotationBy(g.original, norm[0] - g.startNorm[0], norm[1] - g.startNorm[1]);
+          draftRef.current = moveAnnotationBy(g.original, pt[0] - g.startPoint[0], pt[1] - g.startPoint[1]);
           hiddenIdRef.current = g.id;
         } else {
           // handle drag
           if (!g.moved) g.moved = true;
-          draftRef.current = moveAnnotationHandle(g.original, g.handleId, norm);
+          draftRef.current = moveAnnotationHandle(g.original, g.handleId, pt);
           hiddenIdRef.current = g.id;
         }
         draw();
@@ -364,7 +365,7 @@ export function CanvasEditor() {
           id: DRAFT_ID,
           type: "curve",
           colour: persistedColour(store.textColour),
-          points: [...curveRef.current, norm],
+          points: [...curveRef.current, pt],
         };
         draw();
       }
@@ -398,8 +399,8 @@ export function CanvasEditor() {
       if (g.kind === "line") {
         const draft = draftRef.current;
         const [p0, p1] = draft && draft.type === "line" ? draft.points : [g.start, g.start];
-        const [c0x, c0y] = normToCanvas(vp, p0);
-        const [c1x, c1y] = normToCanvas(vp, p1);
+        const [c0x, c0y] = imageToCanvas(vp, p0);
+        const [c1x, c1y] = imageToCanvas(vp, p1);
         if (Math.hypot(c1x - c0x, c1y - c0y) > DRAG_THRESHOLD) {
           store.addAnnotation(createLine(p0, p1, g.colour));
         }
@@ -413,7 +414,7 @@ export function CanvasEditor() {
           store.updateAnnotation(g.id, draftRef.current);
         } else if (g.original.type === "text") {
           // A click without a drag on a text annotation: edit it.
-          const [x, y] = normToCanvas(vp, [g.original.x, g.original.y]);
+          const [x, y] = imageToCanvas(vp, [g.original.x, g.original.y]);
           openTextEditor(x, y, g.original.text, g.original.colour, { kind: "existing", id: g.id });
         }
         clearDraft();
@@ -449,7 +450,7 @@ export function CanvasEditor() {
         const ann = store.doc.annotations.find((a) => a.id === annId);
         if (ann && ann.type === "text") {
           store.selectAnnotation(annId);
-          const [x, y] = normToCanvas(vp, [ann.x, ann.y]);
+          const [x, y] = imageToCanvas(vp, [ann.x, ann.y]);
           openTextEditor(x, y, ann.text, ann.colour, { kind: "existing", id: annId });
         }
         return;

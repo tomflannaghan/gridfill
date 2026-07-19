@@ -69,7 +69,7 @@ export interface EditorState {
   /** Extend the multi-cell selection by moving the active cell in `direction`,
    * accumulating each visited cell (Shift+Arrow). */
   extendSelection(direction: Direction): void;
-  /** Select every cell with a vertex inside the normalized rectangle (marquee). */
+  /** Select every cell with a vertex inside the pixel rectangle (marquee). */
   selectCellsInRect(rect: [number, number, number, number]): void;
 
   typeChar(ch: string): void;

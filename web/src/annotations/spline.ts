@@ -2,7 +2,7 @@
  * points, used to render and hit-test `curve` annotations. Catmull-Rom passes
  * exactly through every anchor, so the anchors double as editing handles.
  *
- * Operates in any consistent coordinate space (normalized or canvas pixels).
+ * Operates in any consistent coordinate space (source-image or canvas pixels).
  */
 
 import type { Point } from "../model/geometry.ts";

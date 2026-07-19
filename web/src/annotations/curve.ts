@@ -2,7 +2,7 @@
  * points. Each anchor is a draggable handle. */
 
 import { boundsOf, distanceToPolyline, type Point } from "../model/geometry.ts";
-import { normToCanvas } from "../canvas/viewport.ts";
+import { imageToCanvas } from "../canvas/viewport.ts";
 import type { AnnotationKind, Handle } from "./kind.ts";
 import { annotationColour } from "./kind.ts";
 import { annotationStrokeWidth, handleRadius } from "./sizes.ts";
@@ -11,8 +11,8 @@ import { splinePolyline } from "./spline.ts";
 import type { CurveAnnotation } from "./types.ts";
 
 /** The curve flattened to a canvas-space polyline (the smoothed path). */
-function curvePolyline(vp: Parameters<typeof normToCanvas>[0], a: CurveAnnotation): Point[] {
-  return splinePolyline(a.points.map((p) => normToCanvas(vp, p)));
+function curvePolyline(vp: Parameters<typeof imageToCanvas>[0], a: CurveAnnotation): Point[] {
+  return splinePolyline(a.points.map((p) => imageToCanvas(vp, p)));
 }
 
 export const curveKind: AnnotationKind<CurveAnnotation> = {

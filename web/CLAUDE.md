@@ -1,7 +1,7 @@
 # CLAUDE.md — web frontend
 
 Frontend-specific gotchas. See the repo root [CLAUDE.md](../CLAUDE.md) for
-project-wide conventions (normalized coords, BGR colours, the mirrored `.cwd`
+project-wide conventions (pixel coords, BGR colours, the mirrored `.cwd`
 format) and [editor.md](editor.md) for the editor's intended behaviour. Run
 tooling from `web/`: `npm run dev`, `npm test` (vitest), `npm run typecheck`.
 
@@ -22,8 +22,9 @@ text editor) but not the grid pixels.
   that should be undoable snapshots `doc` before changing it. View-only state
   (e.g. `zoomToGrid`) is deliberately *not* part of the doc and *not* undoable.
 - [src/canvas/](src/canvas/) — `render.ts` (draws image → grids → annotations),
-  `viewport.ts` (normalized↔canvas-pixel transforms), `hitTest.ts`,
-  `CanvasEditor.tsx` (pointer/keyboard wiring).
+  `viewport.ts` (source-image-pixel↔canvas-pixel transforms, a single uniform
+  scale — see `imageToCanvas` / `canvasToImage` / `imageLengthToCanvas`),
+  `hitTest.ts`, `CanvasEditor.tsx` (pointer/keyboard wiring).
 - [src/annotations/](src/annotations/) — the annotation kinds. See below.
 - [src/ui/](src/ui/) — React chrome (`Toolbar`, `MenuBar`, `AnnotationEditor`).
 

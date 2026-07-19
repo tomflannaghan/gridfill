@@ -207,11 +207,11 @@ def _connected_groups(cells: list[int], adjacency: dict[int, set[int]]) -> list[
 
 
 def _cell_polygon(labels: np.ndarray, stats: np.ndarray, label: int) -> list[Point]:
-    """Trace one cell region's boundary as a normalized polygon.
+    """Trace one cell region's boundary as a source-image pixel polygon.
 
     The region is grown back by the gap-closing amount so its boundary sits on
     the wall centre (adjacent cells then meet edge-to-edge), then reduced to a
-    handful of vertices. Coordinates are fractions of the source (width, height).
+    handful of vertices.
     """
     height, width = labels.shape
     pad = _GAP_CLOSE_KERNEL * _GAP_CLOSE_ITERS + 2
@@ -230,7 +230,7 @@ def _cell_polygon(labels: np.ndarray, stats: np.ndarray, label: int) -> list[Poi
     contour = max(contours, key=cv2.contourArea)
     eps = _APPROX_EPS_RATIO * cv2.arcLength(contour, True)
     approx = cv2.approxPolyDP(contour, eps, True).reshape(-1, 2)
-    return [(float(px + x0) / width, float(py + y0) / height) for px, py in approx]
+    return [(float(px + x0), float(py + y0)) for px, py in approx]
 
 
 def detect_irregular_grids(binary: np.ndarray) -> list[IrregularGrid]:
