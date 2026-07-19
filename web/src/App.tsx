@@ -4,6 +4,7 @@ import { openCwdFile } from "./lib/files.ts";
 import { MenuBar } from "./ui/MenuBar.tsx";
 import { Toolbar } from "./ui/Toolbar.tsx";
 import { CanvasEditor } from "./canvas/CanvasEditor.tsx";
+import logoUrl from "./assets/logo.svg";
 
 export function App() {
   const doc = useEditor((s) => s.doc);
@@ -55,6 +56,7 @@ export function App() {
           </>
         ) : (
           <div className="empty-state">
+            <img src={logoUrl} alt="" className="empty-logo" />
             <h1>Gridfill Editor</h1>
             <p>Open a .cwd document to start filling in the grid.</p>
             <p className="hint">Use File → Open, or drag a .cwd file here.</p>
