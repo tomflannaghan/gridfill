@@ -41,52 +41,43 @@ coultershaw-hydro too).
 
 ## Deploy
 
-Run these from within each subfolder, in order. They're safe to re-run.
+A [Makefile](Makefile) wraps the three playbooks below — each target just
+`cd`s into the matching subfolder and runs `ansible-playbook`. Run these from
+`deploy/`, in order the first time (subsequent redeploys are safe to re-run in
+any order/combination):
 
-### 1. Backend
+```bash
+make backend    # just the backend
+make nginx      # just nginx
+make frontend   # just the frontend
+make backend frontend   # both, one after the other
+make all        # backend, nginx, frontend, in that order
+```
+
+### 1. Backend (`make backend`)
 
 Builds a wheel locally, uploads it, installs it into a venv owned by the
 `gridfill` user, and starts the systemd service.
-
-```bash
-cd backend
-ansible-playbook -i coultershaw_server, playbook_backend.yaml
-```
 
 Check it: `ssh coultershaw_server systemctl status gridfill`, or
 `curl -F file=@some-scan.png http://127.0.0.1:8420/api/detect` from an SSH
 session on the server.
 
-### 2. nginx (HTTP only, first pass)
+### 2. nginx (`make nginx`) — HTTP only, first pass
 
 Installs the rate-limit zones and the site config. On this first run no
 certificate exists yet, so it serves HTTP only and prepares the ACME challenge
 path. It also installs `certbot`.
 
-```bash
-cd nginx
-ansible-playbook -i coultershaw_server, playbook_nginx.yaml
-```
-
 ### 3. Issue the TLS certificate (manual, one-time)
 
 See [Manual steps](#manual-steps) below — point DNS at the server and run
-`certbot`. Then **re-run the nginx playbook** so it detects the certificate and
-switches to HTTPS (with an HTTP→HTTPS redirect):
+`certbot`. Then **re-run `make nginx`** so it detects the certificate and
+switches to HTTPS (with an HTTP→HTTPS redirect).
 
-```bash
-cd nginx
-ansible-playbook -i coultershaw_server, playbook_nginx.yaml
-```
-
-### 4. Frontend
+### 4. Frontend (`make frontend`)
 
 Builds the web editor (with the API URL baked in) and uploads the static files.
-
-```bash
-cd frontend
-ansible-playbook -i coultershaw_server, playbook_frontend.yaml
-```
 
 Visit https://gridfill.flannaghan.com — open a `.cwd`, or upload a scan/PDF to
 have the backend detect a grid.
@@ -144,6 +135,7 @@ playbook (step 3) to enable HTTPS.
 
 | Path | What it does |
 | --- | --- |
+| [Makefile](Makefile) | `make backend` / `make nginx` / `make frontend` / `make all` |
 | [backend/playbook_backend.yaml](backend/playbook_backend.yaml) | Build wheel, install into venv, run systemd service |
 | [backend/gridfill.service](backend/gridfill.service) | systemd unit for `gridfill-server` |
 | [frontend/playbook_frontend.yaml](frontend/playbook_frontend.yaml) | Build the SPA and upload static files |
