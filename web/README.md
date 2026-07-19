@@ -31,7 +31,7 @@ one from the Python CLI, e.g. `cd ../python && uv run gridfill scan.png`.
 - `src/canvas/` — the canvas surface: `viewport.ts` (image↔canvas transform),
   `render.ts` (drawing), `hitTest.ts`, and the `CanvasEditor` component.
 - `src/ui/` — the menu bar, colour picker, inline annotation editor, context menu.
-- `src/lib/files.ts` — open / save `.cwd` and export PNG/JPEG.
+- `src/lib/files.ts` — open / save `.cwd` and export PNG.
 
 ### Coordinates & colours
 

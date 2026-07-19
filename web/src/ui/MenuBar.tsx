@@ -76,20 +76,10 @@ export function MenuBar({ onError }: Props) {
         disabled={!hasDoc}
         onClick={() => {
           const s = useEditor.getState();
-          if (s.doc && s.image) exportImage(s.doc, s.image.element, "png", s.fileName);
+          if (s.doc && s.image) exportImage(s.doc, s.image.element, s.fileName);
         }}
       >
-        Export PNG
-      </button>
-      <button
-        type="button"
-        disabled={!hasDoc}
-        onClick={() => {
-          const s = useEditor.getState();
-          if (s.doc && s.image) exportImage(s.doc, s.image.element, "jpeg", s.fileName);
-        }}
-      >
-        Export JPEG
+        Export
       </button>
 
       <label className="color-control">

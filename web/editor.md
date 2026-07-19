@@ -138,8 +138,8 @@ annotation edit — and **Redo (Ctrl+Shift+Z**, or **Ctrl+Y)** reapplies it.
 
 - **Save (Ctrl+S)** writes a `.cwd` document containing the source image and all
   grid state and annotations, so work can be resumed later.
-- **Export Image (Ctrl+Shift+S)** writes the finished, filled-in grid as a
-  PNG or JPEG, without any of the editing chrome.
+- **Export (Ctrl+Shift+S)** writes the finished, filled-in grid as a PNG,
+  without any of the editing chrome.
 
 There is **no automatic letter recognition** — every cell's content is entered
 by hand.
