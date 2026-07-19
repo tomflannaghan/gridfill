@@ -2,10 +2,10 @@
  * annotation tool palette, the text/highlight colour pills, and the "zoom to
  * grid" view toggle. */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useEditor } from "../state/store.ts";
-import { openCwdFile, saveCwd, exportImage } from "../lib/files.ts";
-import { detectFromImage } from "../lib/backend.ts";
+import { saveCwd, exportImage } from "../lib/files.ts";
+import { confirmDiscardIfDirty, useOpenFile } from "../lib/useOpenFile.ts";
 import { bgrToHex, contrastFg, hexToBgr } from "../model/colour.ts";
 import { IconFolderOpen, IconSave, IconDownload, IconPaintBucket, IconAspectRatio } from "./icons.tsx";
 import { Toolbar } from "./Toolbar.tsx";
@@ -17,7 +17,7 @@ interface Props {
 
 export function MenuBar({ onError }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [detecting, setDetecting] = useState(false);
+  const { openFile, detecting } = useOpenFile(onError);
   const highlightInputRef = useRef<HTMLInputElement>(null);
   const textColourInputRef = useRef<HTMLInputElement>(null);
   const doc = useEditor((s) => s.doc);
@@ -60,33 +60,6 @@ export function MenuBar({ onError }: Props) {
     el.addEventListener("change", onCommit);
     return () => el.removeEventListener("change", onCommit);
   }, []);
-
-  const isCwdFile = (file: File) =>
-    file.name.toLowerCase().endsWith(".cwd") || file.type === "application/json";
-
-  // Opening a different document or returning to the start screen discards
-  // the current one; warn first if it has unsaved changes. Closing the tab
-  // doesn't need this check — the current doc is already auto-saved.
-  const confirmDiscardIfDirty = () =>
-    !dirty || window.confirm("You have unsaved changes. Discard them?");
-
-  const openFile = async (file: File) => {
-    setDetecting(!isCwdFile(file));
-    try {
-      const loaded = isCwdFile(file) ? await openCwdFile(file) : await detectFromImage(file);
-      useEditor
-        .getState()
-        .loadDocument(
-          loaded.doc,
-          { element: loaded.image, width: loaded.width, height: loaded.height },
-          loaded.fileName,
-        );
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setDetecting(false);
-    }
-  };
 
   const hasDoc = doc !== null;
 
