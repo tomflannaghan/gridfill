@@ -18,6 +18,7 @@ venv/
 # Node / frontend
 node_modules/
 *.tsbuildinfo
+.vite/
 
 # OS / editor
 .DS_Store
