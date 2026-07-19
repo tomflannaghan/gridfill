@@ -48,3 +48,10 @@ export function isBlack([b, g, r]: Bgr): boolean {
 export function persistedColour(bgr: Bgr): Bgr | null {
   return isBlack(bgr) ? null : ([...bgr] as Bgr);
 }
+
+/** A readable foreground (black or white) for an icon/glyph drawn over a swatch
+ * filled with `bgr`, picked by perceptual luminance. */
+export function contrastFg([b, g, r]: Bgr): string {
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? "#000000" : "#ffffff";
+}

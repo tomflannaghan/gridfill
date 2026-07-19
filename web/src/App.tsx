@@ -3,7 +3,6 @@ import { useEditor } from "./state/store.ts";
 import { openCwdFile, decodeDocumentImage } from "./lib/files.ts";
 import { loadAutosave, saveAutosave, clearAutosave } from "./lib/autosave.ts";
 import { MenuBar } from "./ui/MenuBar.tsx";
-import { Toolbar } from "./ui/Toolbar.tsx";
 import { CanvasEditor } from "./canvas/CanvasEditor.tsx";
 import logoUrl from "./assets/logo.svg";
 
@@ -118,10 +117,7 @@ export function App() {
       <MenuBar onError={setError} />
       <main className="stage">
         {doc ? (
-          <>
-            <CanvasEditor />
-            <Toolbar />
-          </>
+          <CanvasEditor />
         ) : (
           <div className="empty-state">
             <img src={logoUrl} alt="" className="empty-logo" />

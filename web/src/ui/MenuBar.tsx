@@ -1,33 +1,19 @@
-/** Top bar: File actions (Open / Save / Export) and the highlight colour. */
+/** Top bar: an icon-only toolbar — file actions (Open / Save / Export), the
+ * annotation tool palette, the highlight/text colour swatches, and the
+ * "zoom to grid" view toggle. */
 
 import { useEffect, useRef, useState } from "react";
 import { useEditor } from "../state/store.ts";
 import { openCwdFile, saveCwd, exportImage } from "../lib/files.ts";
 import { detectFromImage } from "../lib/backend.ts";
-import { bgrToHex, hexToBgr } from "../model/colour.ts";
+import { bgrToHex, contrastFg, hexToBgr } from "../model/colour.ts";
+import { IconFolderOpen, IconSave, IconDownload, IconPaintBucket, IconAspectRatio } from "./icons.tsx";
+import { Toolbar } from "./Toolbar.tsx";
 import logoUrl from "../assets/logo.svg";
 
 interface Props {
   onError(message: string): void;
 }
-
-/** Paintbrush glyph for the "apply colour to selection" buttons. */
-const PaintbrushIcon = () => (
-  <svg
-    width={15}
-    height={15}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={2}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <path d="M14 3l7 7-8 3-2-2z" />
-    <path d="M11 11l-4 4c-1 1-3 1-3 3 0 1 1 2 3 2 2 0 2-2 3-3l4-4" />
-  </svg>
-);
 
 export function MenuBar({ onError }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -39,13 +25,7 @@ export function MenuBar({ onError }: Props) {
   const highlight = useEditor((s) => s.highlight);
   const textColour = useEditor((s) => s.textColour);
   const zoomToGrid = useEditor((s) => s.zoomToGrid);
-  const selection = useEditor((s) => s.selection);
-  const selectedCells = useEditor((s) => s.selectedCells);
-  const selectedAnnotationId = useEditor((s) => s.selectedAnnotationId);
   const dirty = useEditor((s) => s.dirty);
-
-  const hasSelection = selection !== null || selectedCells.length > 0;
-  const hasTextColourTarget = hasSelection || selectedAnnotationId !== null;
 
   // Picking a colour applies it to the current selection immediately, in
   // addition to becoming the colour used for subsequent typing/annotations.
@@ -108,74 +88,94 @@ export function MenuBar({ onError }: Props) {
 
       <button
         type="button"
+        className="icon-btn"
         disabled={detecting}
         onClick={() => fileInputRef.current?.click()}
         title="Open a .cwd document, or an image/PDF to detect a grid from via the gridfill backend"
+        aria-label={detecting ? "Loading…" : "Open"}
       >
-        {detecting ? "Loading…" : "Open…"}
-      </button>
-      <button type="button" disabled={!hasDoc} onClick={() => doc && saveCwd(doc, fileName)}>
-        Save
+        <IconFolderOpen />
       </button>
       <button
         type="button"
+        className="icon-btn"
+        disabled={!hasDoc}
+        onClick={() => doc && saveCwd(doc, fileName)}
+        title="Save"
+        aria-label="Save"
+      >
+        <IconSave />
+      </button>
+      <button
+        type="button"
+        className="icon-btn"
         disabled={!hasDoc}
         onClick={() => {
           const s = useEditor.getState();
           if (s.doc && s.image) exportImage(s.doc, s.image.element, s.fileName);
         }}
+        title="Export image"
+        aria-label="Export image"
       >
-        Export Image
+        <IconDownload />
       </button>
 
-      <label className="color-control">
-        Highlight
-        <input
-          ref={highlightInputRef}
-          type="color"
-          value={bgrToHex(highlight)}
-          onChange={(e) => useEditor.getState().setHighlight(hexToBgr(e.target.value))}
-        />
-        <button
-          type="button"
-          className="apply-btn"
-          disabled={!hasSelection}
-          title="Apply highlight to selection"
-          aria-label="Apply highlight to selection"
-          onClick={() => useEditor.getState().applyHighlightToSelection()}
-        >
-          <PaintbrushIcon />
-        </button>
-      </label>
+      <span className="menubar-divider" />
 
-      <label className="color-control">
-        Text
-        <input
-          ref={textColourInputRef}
-          type="color"
-          value={bgrToHex(textColour)}
-          onChange={(e) => useEditor.getState().setTextColour(hexToBgr(e.target.value))}
-        />
-        <button
-          type="button"
-          className="apply-btn"
-          disabled={!hasTextColourTarget}
-          title="Apply text colour to selection"
-          aria-label="Apply text colour to selection"
-          onClick={() => useEditor.getState().applyTextColourToSelection()}
-        >
-          <PaintbrushIcon />
-        </button>
-      </label>
+      <Toolbar />
 
-      <label className="toggle-control">
-        <input
-          type="checkbox"
-          checked={zoomToGrid}
-          onChange={(e) => useEditor.getState().setZoomToGrid(e.target.checked)}
-        />
-        Zoom to grid
-      </label>
+      <span className="menubar-divider" />
+
+      <button
+        type="button"
+        className="colour-swatch"
+        style={{ background: bgrToHex(highlight), color: contrastFg(highlight) }}
+        title="Highlight (cell background) colour — applies to the current selection"
+        aria-label="Highlight colour"
+        onClick={() => highlightInputRef.current?.click()}
+      >
+        <IconPaintBucket />
+      </button>
+      <input
+        ref={highlightInputRef}
+        type="color"
+        className="hidden-color-input"
+        value={bgrToHex(highlight)}
+        onChange={(e) => useEditor.getState().setHighlight(hexToBgr(e.target.value))}
+      />
+
+      <button
+        type="button"
+        className="colour-swatch"
+        style={{ background: bgrToHex(textColour), color: contrastFg(textColour) }}
+        title="Text colour — applies to the current selection"
+        aria-label="Text colour"
+        onClick={() => textColourInputRef.current?.click()}
+      >
+        <span className="colour-swatch-glyph" aria-hidden="true">
+          T
+        </span>
+      </button>
+      <input
+        ref={textColourInputRef}
+        type="color"
+        className="hidden-color-input"
+        value={bgrToHex(textColour)}
+        onChange={(e) => useEditor.getState().setTextColour(hexToBgr(e.target.value))}
+      />
+
+      <span className="menubar-divider" />
+
+      <button
+        type="button"
+        className={zoomToGrid ? "icon-btn active" : "icon-btn"}
+        onClick={() => useEditor.getState().setZoomToGrid(!zoomToGrid)}
+        title="Zoom to grid — fit the view to the selected grid"
+        aria-label="Zoom to grid"
+        aria-pressed={zoomToGrid}
+      >
+        <IconAspectRatio />
+      </button>
 
       <span className="filename">
         {fileName ?? "No file"}
