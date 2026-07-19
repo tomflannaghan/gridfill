@@ -372,10 +372,20 @@ export const useEditor = create<EditorState>((set, get) => {
     },
 
     applyTextColourToSelection() {
-      const { doc, textColour } = get();
-      const targets = selectionTargets();
-      if (!doc || targets.length === 0) return;
+      const { doc, textColour, selectedAnnotationId } = get();
+      if (!doc) return;
       const colour = persistedColour(textColour);
+
+      if (selectedAnnotationId !== null) {
+        const annotations = doc.annotations.map((a) =>
+          a.id === selectedAnnotationId ? { ...a, colour } : a,
+        );
+        set(commit({ ...doc, annotations }));
+        return;
+      }
+
+      const targets = selectionTargets();
+      if (targets.length === 0) return;
       set(commit(withCells(doc, targets, (c) => ({ ...c, textColour: colour }))));
     },
 

@@ -1,6 +1,6 @@
 /** Top bar: File actions (Open / Save / Export) and the highlight colour. */
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useEditor } from "../state/store.ts";
 import { openCwdFile, saveCwd, exportImage } from "../lib/files.ts";
 import { bgrToHex, hexToBgr } from "../model/colour.ts";
@@ -30,6 +30,8 @@ const PaintbrushIcon = () => (
 
 export function MenuBar({ onError }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const highlightInputRef = useRef<HTMLInputElement>(null);
+  const textColourInputRef = useRef<HTMLInputElement>(null);
   const doc = useEditor((s) => s.doc);
   const fileName = useEditor((s) => s.fileName);
   const highlight = useEditor((s) => s.highlight);
@@ -37,9 +39,40 @@ export function MenuBar({ onError }: Props) {
   const zoomToGrid = useEditor((s) => s.zoomToGrid);
   const selection = useEditor((s) => s.selection);
   const selectedCells = useEditor((s) => s.selectedCells);
+  const selectedAnnotationId = useEditor((s) => s.selectedAnnotationId);
   const dirty = useEditor((s) => s.dirty);
 
   const hasSelection = selection !== null || selectedCells.length > 0;
+  const hasTextColourTarget = hasSelection || selectedAnnotationId !== null;
+
+  // Picking a colour applies it to the current selection immediately, in
+  // addition to becoming the colour used for subsequent typing/annotations.
+  // Listen for the native "change" event (fired once when the picker closes)
+  // rather than the onChange prop below (which fires on every intermediate
+  // tick while dragging inside the picker) so applying is a single undo step.
+  useEffect(() => {
+    const el = highlightInputRef.current;
+    if (!el) return;
+    const onCommit = (e: Event) => {
+      const s = useEditor.getState();
+      s.setHighlight(hexToBgr((e.target as HTMLInputElement).value));
+      s.applyHighlightToSelection(); // no-op without a selection
+    };
+    el.addEventListener("change", onCommit);
+    return () => el.removeEventListener("change", onCommit);
+  }, []);
+
+  useEffect(() => {
+    const el = textColourInputRef.current;
+    if (!el) return;
+    const onCommit = (e: Event) => {
+      const s = useEditor.getState();
+      s.setTextColour(hexToBgr((e.target as HTMLInputElement).value));
+      s.applyTextColourToSelection(); // no-op without a selection/annotation
+    };
+    el.addEventListener("change", onCommit);
+    return () => el.removeEventListener("change", onCommit);
+  }, []);
 
   const openFile = async (file: File) => {
     try {
@@ -85,6 +118,7 @@ export function MenuBar({ onError }: Props) {
       <label className="color-control">
         Highlight
         <input
+          ref={highlightInputRef}
           type="color"
           value={bgrToHex(highlight)}
           onChange={(e) => useEditor.getState().setHighlight(hexToBgr(e.target.value))}
@@ -104,6 +138,7 @@ export function MenuBar({ onError }: Props) {
       <label className="color-control">
         Text
         <input
+          ref={textColourInputRef}
           type="color"
           value={bgrToHex(textColour)}
           onChange={(e) => useEditor.getState().setTextColour(hexToBgr(e.target.value))}
@@ -111,7 +146,7 @@ export function MenuBar({ onError }: Props) {
         <button
           type="button"
           className="apply-btn"
-          disabled={!hasSelection}
+          disabled={!hasTextColourTarget}
           title="Apply text colour to selection"
           aria-label="Apply text colour to selection"
           onClick={() => useEditor.getState().applyTextColourToSelection()}

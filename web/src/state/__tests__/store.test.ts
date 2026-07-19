@@ -242,6 +242,25 @@ describe("apply colour to selection", () => {
     expect(cellOf(0).textColour).toBeNull();
   });
 
+  it("applies to the selected annotation instead of cells when one is selected", () => {
+    const s = useEditor.getState();
+    const line = createLine([0, 0], [100, 100], null);
+    s.addAnnotation(line);
+    s.selectCell(0, 4); // deselected again by selectAnnotation below
+    s.selectAnnotation(line.id);
+    s.setTextColour([10, 20, 30]);
+    const undoDepth = useEditor.getState().past.length;
+
+    s.applyTextColourToSelection();
+    const updated = useEditor.getState().doc!.annotations[0]!;
+    expect(updated.colour).toEqual([10, 20, 30]);
+    expect(cellOf(4).textColour).toBeNull(); // cell untouched
+    expect(useEditor.getState().past.length).toBe(undoDepth + 1); // single step
+
+    useEditor.getState().undo();
+    expect(useEditor.getState().doc!.annotations[0]!.colour).toBeNull();
+  });
+
   it("skips block cells and does nothing without a selection", () => {
     const s = useEditor.getState();
     // Make cell 1 a block, then marquee the whole top row.

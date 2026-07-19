@@ -83,9 +83,11 @@ a time, and **Enter** or **Escape** exits the mode.
 default); pressing it again removes the highlight. **Ctrl+Shift+H** opens a
 colour picker to choose a different colour for subsequent highlights.
 
-The **paintbrush** button beside the **Highlight** colour in the top bar applies
-that colour as the background of every selected cell (or the single selected
-cell). This is a single undoable step.
+Choosing a new colour in the **Highlight** picker immediately applies it as the
+background of every selected cell (or the single selected cell), if anything is
+selected — a single undoable step. The **paintbrush** button beside it does the
+same with the current highlight colour, useful for applying it again to a new
+selection without reopening the picker.
 
 ## Text colour
 
@@ -96,10 +98,12 @@ entries can be given different colours; existing content keeps the colour it was
 created with. Each cell's and annotation's colour is saved in the `.cwd`
 document.
 
-The **paintbrush** button beside the **Text** colour recolours the letters of
-every selected cell (or the single selected cell) with the current text colour —
-a single undoable step. This is the way to change the colour of letters already
-entered.
+Choosing a new colour in the **Text** picker immediately recolours the letters
+of every selected cell (or the single selected cell), or the selected
+annotation if one is selected instead of cells — a single undoable step. This
+is the way to change the colour of content already entered. The **paintbrush**
+button beside it does the same with the current text colour, useful for
+applying it again to a new selection without reopening the picker.
 
 ## Annotations
 
