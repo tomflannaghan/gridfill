@@ -59,4 +59,20 @@ describe("cellsInRect", () => {
     // A tiny box in the gap between cells (cells span ±40 around each pitch).
     expect(cellsInRect(doc3x3(), [45, 45, 55, 55])).toEqual([]);
   });
+
+  it("selects a cell fully containing the rectangle, with no vertex of either shape inside the other", () => {
+    // A small box entirely inside the top-left cell (which spans ±40): none of
+    // the cell's vertices fall in the box, and none of the box's corners are
+    // outside the cell, so a vertex-only test would miss this overlap.
+    expect(idx(cellsInRect(doc3x3(), [-10, -10, 10, 10]))).toEqual([0]);
+  });
+
+  it("selects a cell the rectangle only touches through crossing edges", () => {
+    // A wide, short strip through the middle of the top-left cell: it pokes
+    // out past the cell's left/right edges (but stays short of the next
+    // column's cell, which starts at x=60), so neither the cell's vertices
+    // fall inside the strip nor the strip's corners fall inside the cell —
+    // only the edges cross.
+    expect(idx(cellsInRect(doc3x3(), [-55, -10, 55, 10]))).toEqual([0]);
+  });
 });

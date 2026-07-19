@@ -4,7 +4,7 @@
  * kind). */
 
 import type { Cwd } from "../model/cwd.ts";
-import { pointInPolygon } from "../model/geometry.ts";
+import { pointInPolygon, polygonIntersectsRect } from "../model/geometry.ts";
 import { canvasToImage, type Viewport } from "./viewport.ts";
 import type { Selection } from "../state/store.ts";
 
@@ -20,10 +20,10 @@ export function hitTestCell(doc: Cwd, vp: Viewport, cx: number, cy: number): Sel
   return null;
 }
 
-/** Every cell (across all grids) with at least one polygon vertex inside the
- * image-pixel rectangle `rect` ([x0, y0, x1, y1], corners in any order). Used
- * for marquee selection — a cell is caught if the rectangle touches any of its
- * corners. */
+/** Every cell (across all grids) whose polygon overlaps the image-pixel
+ * rectangle `rect` ([x0, y0, x1, y1], corners in any order). Used for marquee
+ * selection — a cell is caught whenever the rectangle overlaps any part of
+ * it, not just when a vertex or corner falls inside the other shape. */
 export function cellsInRect(doc: Cwd, rect: [number, number, number, number]): Selection[] {
   const minX = Math.min(rect[0], rect[2]);
   const maxX = Math.max(rect[0], rect[2]);
@@ -33,10 +33,9 @@ export function cellsInRect(doc: Cwd, rect: [number, number, number, number]): S
   for (let gi = 0; gi < doc.grids.length; gi++) {
     const cells = doc.grids[gi]!.cells;
     for (let ci = 0; ci < cells.length; ci++) {
-      const inside = cells[ci]!.polygon.some(
-        ([x, y]) => x >= minX && x <= maxX && y >= minY && y <= maxY,
-      );
-      if (inside) out.push({ gridIndex: gi, cellIndex: ci });
+      if (polygonIntersectsRect(cells[ci]!.polygon, minX, minY, maxX, maxY)) {
+        out.push({ gridIndex: gi, cellIndex: ci });
+      }
     }
   }
   return out;

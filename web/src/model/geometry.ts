@@ -36,6 +36,58 @@ export function pointInPolygon(x: number, y: number, polygon: Point[]): boolean 
   return inside;
 }
 
+/** True if segments p1-p2 and p3-p4 cross. Parallel (including collinear)
+ * segments return false; that's fine here since callers also check vertex and
+ * corner containment, which catch axis-aligned touching/overlapping cases. */
+function segmentsIntersect(p1: Point, p2: Point, p3: Point, p4: Point): boolean {
+  const rx = p2[0] - p1[0];
+  const ry = p2[1] - p1[1];
+  const sx = p4[0] - p3[0];
+  const sy = p4[1] - p3[1];
+  const rxs = rx * sy - ry * sx;
+  if (rxs === 0) return false;
+  const qpx = p3[0] - p1[0];
+  const qpy = p3[1] - p1[1];
+  const t = (qpx * sy - qpy * sx) / rxs;
+  const u = (qpx * ry - qpy * rx) / rxs;
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+}
+
+/** True if `polygon` overlaps the axis-aligned rectangle [minX, minY]-[maxX,
+ * maxY] — sharing area, not just a vertex landing inside the other shape.
+ * Used for marquee selection so a cell is caught whenever the drag rectangle
+ * overlaps any part of it. Checks, in order: a polygon vertex inside the
+ * rect, a rect corner inside the polygon (the rect fully inside a cell), and
+ * a polygon edge crossing a rect edge (a "plus sign" overlap where neither
+ * shape's vertices land inside the other). */
+export function polygonIntersectsRect(
+  polygon: Point[],
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): boolean {
+  for (const [x, y] of polygon) {
+    if (x >= minX && x <= maxX && y >= minY && y <= maxY) return true;
+  }
+  const corners: Point[] = [
+    [minX, minY],
+    [maxX, minY],
+    [maxX, maxY],
+    [minX, maxY],
+  ];
+  for (const corner of corners) {
+    if (pointInPolygon(corner[0], corner[1], polygon)) return true;
+  }
+  const n = polygon.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    for (let k = 0, l = 3; k < 4; l = k++) {
+      if (segmentsIntersect(polygon[j]!, polygon[i]!, corners[l]!, corners[k]!)) return true;
+    }
+  }
+  return false;
+}
+
 /** Counter-clockwise convex hull of `points` (Andrew's monotone chain).
  * Ported from `convex_hull` in the Python geometry module. */
 export function convexHull(points: Point[]): Point[] {
