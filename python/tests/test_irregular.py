@@ -11,10 +11,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import cv2
+import pytest
 
 from gridfill.detection import detect_grids, detect_irregular_grids
 from gridfill.preprocess import binarize, to_grayscale
 from gridfill.types import Grid, IrregularGrid, RectangularGrid
+
+from .synthetic import make_brick_grid
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -121,3 +124,31 @@ def test_every_cell_has_a_polygon() -> None:
         for grid in _detect(name):
             for cell in grid.cells:
                 assert len(cell.polygon) >= 3
+
+
+@pytest.mark.parametrize("scale", [0.5, 1.0, 2.0, 4.0])
+def test_brick_grid_detected_at_different_resolutions(scale: float) -> None:
+    """A brick-pattern grid (offset rows, no continuous vertical line across
+    rows -- only findable via irregular detection) must be detected whether
+    it's rendered at low or high resolution.
+
+    Regression test for a bug where the adjacency-bridging distance was a
+    fixed pixel constant tuned for one scan's line thickness: a real scan
+    whose grid lines were thicker than that constant (a higher-DPI render, in
+    effect) had every cell come out as its own isolated region, so no lattice
+    of 4+ adjacent cells was ever found. Rendering the *same* logical grid at
+    several pixel scales, with the line thickness scaled proportionally as a
+    real higher/lower-DPI render would, reproduces that.
+    """
+    grid = make_brick_grid(
+        n_rows=6,
+        n_cols=6,
+        cell_w=round(60 * scale),
+        cell_h=round(40 * scale),
+        pad=round(50 * scale),
+        line_thickness=max(1, round(2 * scale)),
+    )
+    binary = binarize(to_grayscale(grid.image))
+    grids = detect_irregular_grids(binary)
+    assert len(grids) == 1
+    assert len(grids[0].cells) == grid.n_cells
