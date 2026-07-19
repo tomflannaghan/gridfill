@@ -45,10 +45,7 @@ Cut a release of gridfill at version `$ARGUMENTS`.
 
 7. **Confirm before pushing.** Pushing to `origin/master` and pushing a tag are
    both visible, hard-to-reverse actions — show the user the commit and tag
-   you're about to push and get explicit confirmation first. Mention that
-   pushing the tag triggers
-   [.github/workflows/build.yml](../../.github/workflows/build.yml), which
-   builds the standalone executables and publishes a GitHub release.
+   you're about to push and get explicit confirmation first.
 
 8. **Push.** Once confirmed:
 
@@ -58,11 +55,9 @@ Cut a release of gridfill at version `$ARGUMENTS`.
    ```
 
    Push the branch first so the tagged commit is reachable from `master` on
-   the remote before the tag (and the release build it triggers) shows up.
+   the remote before the tag shows up.
 
-9. Report the release tag and a link to the Actions run / releases page if
-   `gh` is available (e.g. `gh run list --workflow=build.yml -L 1`), otherwise
-   just confirm what was pushed.
+9. Report the release tag and confirm what was pushed.
 
 ## Notes
 
