@@ -1,8 +1,9 @@
 /** Top bar: File actions (Open / Save / Export) and the highlight colour. */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useEditor } from "../state/store.ts";
 import { openCwdFile, saveCwd, exportImage } from "../lib/files.ts";
+import { detectFromImage } from "../lib/backend.ts";
 import { bgrToHex, hexToBgr } from "../model/colour.ts";
 import logoUrl from "../assets/logo.svg";
 
@@ -30,6 +31,8 @@ const PaintbrushIcon = () => (
 
 export function MenuBar({ onError }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  const [detecting, setDetecting] = useState(false);
   const highlightInputRef = useRef<HTMLInputElement>(null);
   const textColourInputRef = useRef<HTMLInputElement>(null);
   const doc = useEditor((s) => s.doc);
@@ -91,6 +94,24 @@ export function MenuBar({ onError }: Props) {
 
   const hasDoc = doc !== null;
 
+  const detectFile = async (file: File) => {
+    setDetecting(true);
+    try {
+      const loaded = await detectFromImage(file);
+      useEditor
+        .getState()
+        .loadDocument(
+          loaded.doc,
+          { element: loaded.image, width: loaded.width, height: loaded.height },
+          loaded.fileName,
+        );
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDetecting(false);
+    }
+  };
+
   return (
     <header className="menubar">
       <span className="brand">
@@ -100,6 +121,14 @@ export function MenuBar({ onError }: Props) {
 
       <button type="button" onClick={() => fileInputRef.current?.click()}>
         Open…
+      </button>
+      <button
+        type="button"
+        disabled={detecting}
+        onClick={() => scanInputRef.current?.click()}
+        title="Detect a grid from a scanned image or PDF via the gridfill backend"
+      >
+        {detecting ? "Detecting…" : "Detect from scan…"}
       </button>
       <button type="button" disabled={!hasDoc} onClick={() => doc && saveCwd(doc, fileName)}>
         Save
@@ -177,6 +206,18 @@ export function MenuBar({ onError }: Props) {
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) void openFile(file);
+          e.target.value = "";
+        }}
+      />
+
+      <input
+        ref={scanInputRef}
+        type="file"
+        accept=".png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,.pdf,image/*,application/pdf"
+        className="hidden-file-input"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void detectFile(file);
           e.target.value = "";
         }}
       />

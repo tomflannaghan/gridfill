@@ -114,18 +114,17 @@ class Document:
     annotations: list[Annotation] = field(default_factory=list)
 
 
-def save_document(
-    path: str | os.PathLike[str],
+def _document_payload(
     image: np.ndarray,
     grids: Sequence[Grid],
     annotations: Sequence[Annotation],
-) -> None:
-    """Write *image*, *grids*, and *annotations* to *path* as a ``.cwd`` document."""
+) -> dict[str, Any]:
+    """Build the JSON-serializable ``.cwd`` payload for *image*, *grids*, *annotations*."""
     ok, encoded = cv2.imencode(".png", image)
     if not ok:
         raise OSError("Could not encode image for saving")
 
-    payload = {
+    return {
         "format": _FORMAT_MAGIC,
         "version": _FORMAT_VERSION,
         "image": {
@@ -135,6 +134,30 @@ def save_document(
         "grids": [grid.to_dict() for grid in grids],
         "annotations": [annotation.to_dict() for annotation in annotations],
     }
+
+
+def document_to_json(
+    image: np.ndarray,
+    grids: Sequence[Grid],
+    annotations: Sequence[Annotation],
+) -> str:
+    """Serialize *image*, *grids*, and *annotations* as a ``.cwd`` JSON string.
+
+    Same document shape as :func:`save_document`, without writing to disk --
+    for callers (e.g. the HTTP backend) that hand the document to a client
+    directly rather than to the filesystem.
+    """
+    return json.dumps(_document_payload(image, grids, annotations))
+
+
+def save_document(
+    path: str | os.PathLike[str],
+    image: np.ndarray,
+    grids: Sequence[Grid],
+    annotations: Sequence[Annotation],
+) -> None:
+    """Write *image*, *grids*, and *annotations* to *path* as a ``.cwd`` document."""
+    payload = _document_payload(image, grids, annotations)
     with open(path, "w") as f:
         json.dump(payload, f)
 

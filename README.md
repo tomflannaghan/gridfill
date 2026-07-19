@@ -20,10 +20,13 @@ recognition; the document holds the empty grid ready to be filled in.
 
 This is a monorepo:
 
-- [python/](python/) — the Python library and CLI described above.
-- [web/](web/) — a React + TypeScript webapp (purely frontend) for editing the
-  detected grid in the browser: filling cells in by hand, highlighting, and
-  adding annotations. See [web/editor.md](web/editor.md).
+- [python/](python/) — the Python library and CLI described above, plus an
+  optional HTTP backend (`gridfill-server`) the web editor can use to detect a
+  grid from an uploaded scan.
+- [web/](web/) — a React + TypeScript webapp for editing the detected grid in
+  the browser: filling cells in by hand, highlighting, and adding annotations.
+  Opening/saving a `.cwd` needs no backend; going from a raw scan to one uses
+  `gridfill-server`. See [web/editor.md](web/editor.md).
 
 ## Development
 

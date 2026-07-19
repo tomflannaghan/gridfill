@@ -35,12 +35,18 @@ export async function decodeDocumentImage(
   return { image, width: image.naturalWidth, height: image.naturalHeight };
 }
 
-/** Parse a `.cwd` File and decode its image, ready to hand to the store. */
-export async function openCwdFile(file: File): Promise<LoadedDocument> {
-  const text = await file.text();
+/** Parse `.cwd` JSON text and decode its image, ready to hand to the store.
+ * Shared by `openCwdFile` (a local file) and the backend upload flow
+ * (lib/backend.ts), which both end up with `.cwd` text from different sources. */
+export async function loadCwdText(text: string, fileName: string): Promise<LoadedDocument> {
   const doc = parseCwd(text);
   const { image, width, height } = await decodeDocumentImage(doc);
-  return { doc, image, width, height, fileName: file.name };
+  return { doc, image, width, height, fileName };
+}
+
+/** Parse a `.cwd` File and decode its image, ready to hand to the store. */
+export async function openCwdFile(file: File): Promise<LoadedDocument> {
+  return loadCwdText(await file.text(), file.name);
 }
 
 function triggerDownload(blob: Blob, fileName: string): void {
@@ -78,7 +84,7 @@ export function exportImage(doc: Cwd, image: HTMLImageElement, fileName: string 
   }, "image/png");
 }
 
-function stripExtension(name: string): string {
+export function stripExtension(name: string): string {
   const dot = name.lastIndexOf(".");
   return dot > 0 ? name.slice(0, dot) : name;
 }

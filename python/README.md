@@ -20,6 +20,17 @@ gridfill scan.png -o out.cwd   # choose the output path
 source image plus the detected grid layout. There is no automatic letter
 recognition; the document holds the empty grid ready to be filled in.
 
+## HTTP backend
+
+```bash
+uv pip install -e ".[server]"
+gridfill-server                # serves http://127.0.0.1:8420
+```
+
+Exposes the same detection as the CLI over HTTP for the web editor: `POST
+/api/detect` with a multipart `file` (image or PDF) returns a `.cwd` document
+as JSON. See [server.py](src/gridfill/server.py).
+
 ## Python API
 
 ```python

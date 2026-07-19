@@ -6,14 +6,15 @@ Guidance for working in this repo.
 
 This is a monorepo:
 
-- [python/](python/) — the Python library + CLI (grid detection, `.cwd` I/O).
-  The Python project root: `pyproject.toml`, `src/gridfill/`, `tests/` all live
-  here. Run all Python tooling from `python/`.
+- [python/](python/) — the Python library + CLI (grid detection, `.cwd` I/O),
+  plus an optional HTTP backend ([server.py](python/src/gridfill/server.py),
+  `gridfill-server`) that lets the web editor upload a scan and get a detected
+  `.cwd` back. The Python project root: `pyproject.toml`, `src/gridfill/`,
+  `tests/` all live here. Run all Python tooling from `python/`.
 - [web/](web/) — the React + TypeScript frontend for editing `.cwd` documents
-  in the browser (purely frontend, no backend). See [web/editor.md](web/editor.md)
-  for the editor's intended behavior.
-- A backend serving the frontend from the Python library is planned but not yet
-  present.
+  in the browser. It needs no backend to open/save/export a `.cwd` file (it's
+  plain JSON) — the backend above is only used to go from a raw scan to one.
+  See [web/editor.md](web/editor.md) for the editor's intended behavior.
 
 ## What this is
 

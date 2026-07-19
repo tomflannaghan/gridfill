@@ -7,9 +7,15 @@ tooling from `web/`: `npm run dev`, `npm test` (vitest), `npm run typecheck`.
 
 ## Architecture
 
-Purely a frontend — a `.cwd` is plain JSON, so no backend is involved. The
-canvas is drawn **imperatively**; React owns the chrome (toolbar, menus, inline
-text editor) but not the grid pixels.
+A `.cwd` is plain JSON, so opening/saving/exporting one needs no backend. The
+only backend-dependent piece is going from a raw scan to a `.cwd` in the first
+place: [lib/backend.ts](src/lib/backend.ts)'s `detectFromImage` uploads an
+image/PDF to the optional Python HTTP backend
+([python/src/gridfill/server.py](../python/src/gridfill/server.py),
+`gridfill-server`, default `http://127.0.0.1:8420`) and loads the `.cwd` it
+returns, wired up in `MenuBar`'s "Detect from scan…" button. The canvas is
+drawn **imperatively**; React owns the chrome (toolbar, menus, inline text
+editor) but not the grid pixels.
 
 - [src/model/](src/model/) — pure, framework-free logic: `cwd.ts` (the document
   model + parse/serialize, **mirrors Python `document.py`** — keep in sync),
