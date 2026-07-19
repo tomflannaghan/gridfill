@@ -1,0 +1,6 @@
+# Ansible run artifacts
+*.retry
+
+# Local-only inventory / variable overrides, in case any are ever added
+inventory.local
+*.local.yaml

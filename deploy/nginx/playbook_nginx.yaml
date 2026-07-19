@@ -1,0 +1,78 @@
+---
+# Configure nginx for gridfill.flannaghan.com: serve the SPA and reverse-proxy
+# /api/ to the backend, with rate limiting. Also installs certbot (the cert is
+# issued manually once — see deploy/README.md).
+#
+# The site template auto-detects whether a TLS certificate exists yet:
+#   - first run (no cert)  -> HTTP-only, ready for the certbot challenge
+#   - after cert is issued -> HTTPS + redirect (re-run this playbook)
+#
+#   cd nginx
+#   ansible-playbook -i coultershaw_server, playbook_nginx.yaml
+
+- name: Configure nginx for gridfill
+  hosts: all
+  become: true
+  vars:
+    domain: gridfill.flannaghan.com
+    webroot: /var/www/gridfill.flannaghan.com/html
+    backend: 127.0.0.1:8420
+    max_upload: 25m
+
+  handlers:
+    - name: reload nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+
+  tasks:
+    - name: Install certbot (webroot mode; does not touch nginx config)
+      ansible.builtin.apt:
+        name: certbot
+        state: present
+        update_cache: true
+
+    - name: Ensure the web root exists (for the ACME challenge)
+      ansible.builtin.file:
+        path: "{{ webroot }}"
+        state: directory
+        mode: "0755"
+
+    - name: Install the rate-limit zones
+      ansible.builtin.copy:
+        src: gridfill_ratelimit.conf
+        dest: /etc/nginx/conf.d/gridfill_ratelimit.conf
+        mode: "0644"
+      notify: reload nginx
+
+    - name: Check whether a TLS certificate already exists
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ domain }}/fullchain.pem"
+      register: tls_cert
+
+    - name: Install the site config
+      ansible.builtin.template:
+        src: templates/gridfill.flannaghan.com.conf.j2
+        dest: "/etc/nginx/sites-available/{{ domain }}"
+        mode: "0644"
+      vars:
+        tls_enabled: "{{ tls_cert.stat.exists }}"
+      notify: reload nginx
+
+    - name: Enable the site
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/{{ domain }}"
+        dest: "/etc/nginx/sites-enabled/{{ domain }}"
+        state: link
+      notify: reload nginx
+
+    - name: Validate the nginx configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Report TLS state
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'TLS certificate found — serving HTTPS.' if tls_cert.stat.exists
+             else 'No certificate yet — serving HTTP only. Issue one with certbot
+                   (see README), then re-run this playbook.' }}

@@ -1,0 +1,112 @@
+---
+# Deploy the gridfill HTTP backend (gridfill-server) as a systemd service.
+#
+# Strategy: build a wheel locally, upload just that one file, and pip-install
+# it (with the [server] extra) into a venv owned by a dedicated `gridfill`
+# system user. All dependencies have public manylinux wheels, so nothing is
+# compiled on the server and no private package index is needed.
+#
+#   cd backend
+#   ansible-playbook -i coultershaw_server, playbook_backend.yaml
+
+- name: Deploy gridfill backend
+  hosts: all
+  become: true
+  vars:
+    app_user: gridfill
+    app_home: /home/gridfill
+    venv: /home/gridfill/venv
+
+  tasks:
+    # --- build the wheel on the local machine ---
+    - name: Remove stale local build artifacts
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../../python/dist"
+        state: absent
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Build the gridfill wheel locally
+      ansible.builtin.command: uv build --wheel
+      args:
+        chdir: "{{ playbook_dir }}/../../python"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      changed_when: true
+
+    - name: Locate the built wheel
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/../../python/dist"
+        patterns: "gridfill-*.whl"
+      register: built_wheels
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Expect exactly one wheel
+      ansible.builtin.assert:
+        that: built_wheels.matched == 1
+        fail_msg: "Expected exactly one wheel in python/dist, found {{ built_wheels.matched }}."
+
+    - name: Record the wheel path
+      ansible.builtin.set_fact:
+        wheel_src: "{{ built_wheels.files[0].path }}"
+        wheel_name: "{{ built_wheels.files[0].path | basename }}"
+
+    # --- server-side setup ---
+    - name: Create the gridfill system user
+      ansible.builtin.user:
+        name: "{{ app_user }}"
+        system: true
+        create_home: true
+        home: "{{ app_home }}"
+        shell: /usr/sbin/nologin
+
+    - name: Install python venv + pip
+      ansible.builtin.apt:
+        name:
+          - python3-venv
+          - python3-pip
+        state: present
+        update_cache: true
+
+    - name: Upload the wheel
+      ansible.builtin.copy:
+        src: "{{ wheel_src }}"
+        dest: "{{ app_home }}/{{ wheel_name }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_user }}"
+        mode: "0644"
+
+    - name: Install gridfill + server deps into the venv
+      become_user: "{{ app_user }}"
+      ansible.builtin.pip:
+        name: "{{ app_home }}/{{ wheel_name }}[server]"
+        virtualenv: "{{ venv }}"
+        virtualenv_command: python3 -m venv
+        state: present
+
+    # Force-reinstall the app itself so a redeploy at the *same* version still
+    # ships the new code (--no-deps keeps it fast; deps handled above).
+    - name: Refresh gridfill app code
+      become_user: "{{ app_user }}"
+      ansible.builtin.pip:
+        name: "{{ app_home }}/{{ wheel_name }}"
+        virtualenv: "{{ venv }}"
+        extra_args: "--force-reinstall --no-deps"
+      changed_when: true
+
+    - name: Install the systemd unit
+      ansible.builtin.copy:
+        src: gridfill.service
+        dest: /etc/systemd/system/gridfill.service
+        mode: "0644"
+
+    - name: Enable and (re)start the service
+      ansible.builtin.systemd:
+        name: gridfill
+        daemon_reload: true
+        enabled: true
+        state: restarted

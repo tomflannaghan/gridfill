@@ -1,0 +1,84 @@
+# Managed by Ansible (deploy/nginx/playbook_nginx.yaml) — do not edit on the server.
+#
+# Renders HTTP-only until a Let's Encrypt certificate exists, then adds the
+# HTTPS server and redirects. certbot runs in webroot mode (certonly), so it
+# never edits this file; re-running the playbook is always safe.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ domain }};
+
+    # ACME http-01 challenge (certbot --webroot).
+    location /.well-known/acme-challenge/ {
+        root {{ webroot }};
+    }
+{% if tls_enabled %}
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name {{ domain }};
+
+    ssl_certificate     /etc/letsencrypt/live/{{ domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ domain }}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+
+    root {{ webroot }};
+    index index.html;
+
+    # Cap upload size; the backend loads the whole file into memory.
+    client_max_body_size {{ max_upload }};
+
+    # Static SPA: serve files, fall back to index.html for client routes.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Backend detection API, rate limited.
+    location /api/ {
+        limit_req zone=gridfill_api burst=10 nodelay;
+        limit_conn gridfill_conn 4;
+        limit_req_status 429;
+        limit_conn_status 429;
+
+        proxy_pass http://{{ backend }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+}
+{% else %}
+
+    root {{ webroot }};
+    index index.html;
+
+    client_max_body_size {{ max_upload }};
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        limit_req zone=gridfill_api burst=10 nodelay;
+        limit_conn gridfill_conn 4;
+        limit_req_status 429;
+        limit_conn_status 429;
+
+        proxy_pass http://{{ backend }};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 120s;
+    }
+}
+{% endif %}

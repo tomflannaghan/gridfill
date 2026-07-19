@@ -10,10 +10,12 @@ for local/single-user use alongside the frontend dev server.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import tempfile
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -25,6 +27,38 @@ from .preprocess import binarize, to_grayscale
 
 # Suffixes load_image (via cv2.imread) or the PDF branch can actually handle.
 _ALLOWED_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp", ".pdf"}
+
+# Detection is CPU- and memory-heavy, and this backend shares a small box with
+# other services, so we cap how many detections run at once. Extra requests
+# queue behind the limit (nginx bounds how many can pile up). Set in main().
+_MAX_CONCURRENCY = 1
+_slots_semaphore: asyncio.Semaphore | None = None
+
+
+def _slots() -> asyncio.Semaphore:
+    """The shared concurrency limiter, created lazily so it binds to the running
+    event loop rather than whichever loop happened to be current at import."""
+    global _slots_semaphore
+    if _slots_semaphore is None:
+        _slots_semaphore = asyncio.Semaphore(_MAX_CONCURRENCY)
+    return _slots_semaphore
+
+
+def _detect_document(data: bytes, suffix: str) -> str:
+    """Blocking pipeline: raw upload bytes -> detected ``.cwd`` JSON. Runs in a
+    worker thread (see :func:`detect`) so the heavy CV work never blocks the
+    event loop; raises ``GridfillError``/``OSError`` for the caller to map."""
+    fd, path = tempfile.mkstemp(suffix=suffix)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        image = load_image(path)
+        binary = binarize(to_grayscale(image))
+        grids = detect_grids(binary)
+    finally:
+        os.unlink(path)
+    return document_to_json(image, grids, [])
+
 
 app = FastAPI(
     title="gridfill",
@@ -48,23 +82,18 @@ async def detect(file: UploadFile = File(...)) -> Response:  # noqa: B008 (FastA
     if suffix not in _ALLOWED_SUFFIXES:
         raise HTTPException(400, f"Unsupported file type: {suffix or '(none)'!r}")
 
-    data = await file.read()
-    fd, path = tempfile.mkstemp(suffix=suffix)
-    try:
-        with os.fdopen(fd, "wb") as f:
-            f.write(data)
+    # Hold a slot across the whole request, and only read the upload into memory
+    # once we have one, so queued requests don't each buffer a full image.
+    async with _slots():
+        data = await file.read()
         try:
-            image = load_image(path)
-            binary = binarize(to_grayscale(image))
-            grids = detect_grids(binary)
+            content = await run_in_threadpool(_detect_document, data, suffix)
         except GridfillError as exc:
             raise HTTPException(422, str(exc)) from None
         except OSError as exc:
             raise HTTPException(400, str(exc)) from None
-    finally:
-        os.unlink(path)
 
-    return Response(content=document_to_json(image, grids, []), media_type="application/json")
+    return Response(content=content, media_type="application/json")
 
 
 def main() -> None:
@@ -76,7 +105,16 @@ def main() -> None:
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8420)
+    parser.add_argument(
+        "--max-concurrency",
+        type=int,
+        default=1,
+        help="Maximum simultaneous detections (default: 1); extra requests queue.",
+    )
     args = parser.parse_args()
+
+    global _MAX_CONCURRENCY
+    _MAX_CONCURRENCY = args.max_concurrency
 
     uvicorn.run(app, host=args.host, port=args.port)
 

@@ -1,0 +1,26 @@
+[Unit]
+Description=gridfill detection backend (FastAPI/uvicorn)
+After=network.target
+
+[Service]
+User=gridfill
+Group=gridfill
+Type=simple
+# Bind to loopback only; nginx is the public entry point and proxies to it.
+ExecStart=/home/gridfill/venv/bin/gridfill-server --host 127.0.0.1 --port 8420
+Restart=always
+RestartSec=5
+
+# Hardening. The service only reads its venv (under /home) and writes temp
+# files (PrivateTmp gives it a private /tmp), so it needs no writable paths.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+# Cap memory so a large upload/detection can't take down the shared 1 GB box.
+# Tune upwards if detection of big scans gets OOM-killed (see journalctl).
+MemoryMax=100M
+
+[Install]
+WantedBy=multi-user.target

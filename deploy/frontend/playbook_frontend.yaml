@@ -1,0 +1,57 @@
+---
+# Build the web editor locally and upload the static files nginx serves.
+#
+# The SPA talks to the backend at {{ frontend_api_url }} (baked in at build
+# time via VITE_GRIDFILL_API_URL). It's the public site origin, so requests go
+# to /api/detect on the same host and nginx proxies them to the backend.
+#
+#   cd frontend
+#   ansible-playbook -i coultershaw_server, playbook_frontend.yaml
+
+- name: Build and deploy the gridfill web editor
+  hosts: all
+  become: true
+  vars:
+    webroot: /var/www/gridfill.flannaghan.com/html
+    frontend_api_url: https://gridfill.flannaghan.com
+
+  tasks:
+    - name: Install frontend dependencies (local)
+      ansible.builtin.command: npm ci
+      args:
+        chdir: "{{ playbook_dir }}/../../web"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      changed_when: true
+
+    - name: Build the frontend (local)
+      ansible.builtin.command: npm run build
+      args:
+        chdir: "{{ playbook_dir }}/../../web"
+      environment:
+        VITE_GRIDFILL_API_URL: "{{ frontend_api_url }}"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      changed_when: true
+
+    - name: Ensure the web root exists
+      ansible.builtin.file:
+        path: "{{ webroot }}"
+        state: directory
+        mode: "0755"
+
+    # Clear old hashed assets so stale bundles don't linger; keep .well-known
+    # (used by certbot's http-01 challenge).
+    - name: Clear old assets
+      ansible.builtin.file:
+        path: "{{ webroot }}/assets"
+        state: absent
+
+    - name: Upload the built site
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../web/dist/"
+        dest: "{{ webroot }}/"
+        mode: "0644"
+        directory_mode: "0755"
