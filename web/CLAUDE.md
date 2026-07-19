@@ -13,7 +13,8 @@ place: [lib/backend.ts](src/lib/backend.ts)'s `detectFromImage` uploads an
 image/PDF to the optional Python HTTP backend
 ([python/src/gridfill/server.py](../python/src/gridfill/server.py),
 `gridfill-server`, default `http://127.0.0.1:8420`) and loads the `.cwd` it
-returns, wired up in `MenuBar`'s "Detect from scan…" button. The canvas is
+returns; `MenuBar`'s "Open…" button dispatches to it automatically when the
+chosen file isn't a `.cwd` (by extension/MIME type). The canvas is
 drawn **imperatively**; React owns the chrome (toolbar, menus, inline text
 editor) but not the grid pixels.
 

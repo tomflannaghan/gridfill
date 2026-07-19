@@ -31,7 +31,6 @@ const PaintbrushIcon = () => (
 
 export function MenuBar({ onError }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const scanInputRef = useRef<HTMLInputElement>(null);
   const [detecting, setDetecting] = useState(false);
   const highlightInputRef = useRef<HTMLInputElement>(null);
   const textColourInputRef = useRef<HTMLInputElement>(null);
@@ -77,27 +76,13 @@ export function MenuBar({ onError }: Props) {
     return () => el.removeEventListener("change", onCommit);
   }, []);
 
+  const isCwdFile = (file: File) =>
+    file.name.toLowerCase().endsWith(".cwd") || file.type === "application/json";
+
   const openFile = async (file: File) => {
+    setDetecting(!isCwdFile(file));
     try {
-      const loaded = await openCwdFile(file);
-      useEditor
-        .getState()
-        .loadDocument(
-          loaded.doc,
-          { element: loaded.image, width: loaded.width, height: loaded.height },
-          loaded.fileName,
-        );
-    } catch (err) {
-      onError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  const hasDoc = doc !== null;
-
-  const detectFile = async (file: File) => {
-    setDetecting(true);
-    try {
-      const loaded = await detectFromImage(file);
+      const loaded = isCwdFile(file) ? await openCwdFile(file) : await detectFromImage(file);
       useEditor
         .getState()
         .loadDocument(
@@ -112,6 +97,8 @@ export function MenuBar({ onError }: Props) {
     }
   };
 
+  const hasDoc = doc !== null;
+
   return (
     <header className="menubar">
       <span className="brand">
@@ -119,16 +106,13 @@ export function MenuBar({ onError }: Props) {
         Gridfill Editor
       </span>
 
-      <button type="button" onClick={() => fileInputRef.current?.click()}>
-        Open…
-      </button>
       <button
         type="button"
         disabled={detecting}
-        onClick={() => scanInputRef.current?.click()}
-        title="Detect a grid from a scanned image or PDF via the gridfill backend"
+        onClick={() => fileInputRef.current?.click()}
+        title="Open a .cwd document, or an image/PDF to detect a grid from via the gridfill backend"
       >
-        {detecting ? "Detecting…" : "Detect from scan…"}
+        {detecting ? "Loading…" : "Open…"}
       </button>
       <button type="button" disabled={!hasDoc} onClick={() => doc && saveCwd(doc, fileName)}>
         Save
@@ -141,7 +125,7 @@ export function MenuBar({ onError }: Props) {
           if (s.doc && s.image) exportImage(s.doc, s.image.element, s.fileName);
         }}
       >
-        Export
+        Export Image
       </button>
 
       <label className="color-control">
@@ -201,23 +185,11 @@ export function MenuBar({ onError }: Props) {
       <input
         ref={fileInputRef}
         type="file"
-        accept=".cwd,application/json"
+        accept=".cwd,application/json,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,.pdf,image/*,application/pdf"
         className="hidden-file-input"
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) void openFile(file);
-          e.target.value = "";
-        }}
-      />
-
-      <input
-        ref={scanInputRef}
-        type="file"
-        accept=".png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp,.pdf,image/*,application/pdf"
-        className="hidden-file-input"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void detectFile(file);
           e.target.value = "";
         }}
       />
