@@ -11,7 +11,7 @@ import type { Annotation } from "./types.ts";
  * annotation. `id` is stable within a single annotation. */
 export interface Handle {
   id: string;
-  /** Normalized [0,1] position. */
+  /** Source-image pixel position. */
   point: Point;
 }
 
@@ -24,9 +24,9 @@ export interface AnnotationKind<A extends Annotation = Annotation> {
   bounds(ctx: CanvasRenderingContext2D, vp: Viewport, a: A): [number, number, number, number];
   /** The editable control points, or [] if the kind has none. */
   handles(a: A): Handle[];
-  /** Translate the whole annotation by a normalized delta. */
+  /** Translate the whole annotation by a pixel delta. */
   moveBy(a: A, dx: number, dy: number): A;
-  /** Move one handle (by its id) to a new normalized point. */
+  /** Move one handle (by its id) to a new pixel point. */
   moveHandle(a: A, handleId: string, point: Point): A;
 }
 

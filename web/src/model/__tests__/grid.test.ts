@@ -15,6 +15,7 @@ function square(cx: number, cy: number, s = 0.4): Cell {
     background: null,
     textColour: null,
     centre: null,
+    size: null,
   };
 }
 

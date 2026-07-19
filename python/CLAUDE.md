@@ -1,7 +1,7 @@
 # CLAUDE.md — Python library
 
 Grid detection + `.cwd` I/O. See the repo root [CLAUDE.md](../CLAUDE.md) for
-project-wide conventions (normalized coords, BGR colours, the mirrored `.cwd`
+project-wide conventions (pixel coords, BGR colours, the mirrored `.cwd`
 format). Run all tooling from this directory (`python/`).
 
 The source is heavily docstring'd — read the module/function docstrings first;
@@ -33,7 +33,7 @@ runs **both** detectors and merges:
 - **Rectangular** ([rectangle.py](src/gridfill/detection/rectangle.py)) — the
   precise one. Isolates the axis-aligned **line lattice** (morphological opening
   with long 1-D kernels), finds grid quads, perspective-**rectifies** each, and
-  projects cell boxes back to normalized source coords. Driven purely off grid
+  projects cell boxes back to source-image pixel coords. Driven purely off grid
   *lines*, so it works for blocked and barred grids alike — it never relies on
   black blocks existing.
 - **Irregular** ([irregular.py](src/gridfill/detection/irregular.py)) — the
@@ -59,15 +59,18 @@ Non-obvious bits worth knowing before you touch detection:
   *and* for whole grids on a page. It's band-based (a new row starts when `cy`
   jumps more than `band`), so the band parameter matters.
 
-## Cell geometry: the incircle centre
+## Cell geometry: the incircle centre and size
 
-Each `Cell` carries a `centre` (`polygon_centre` in
+Each `Cell` carries a `centre` and a `size` (`polygon_incircle` in
 [geometry.py](src/gridfill/geometry.py)) — the **incircle** centre (largest
-inscribed circle), *not* the vertex mean. For an irregular/concave cell the
-vertex mean can drift or fall outside the shape; the incircle centre is where a
-glyph actually sits and what navigation treats as the cell's location. It's
-computed once at detection time and **persisted** in the `.cwd` so the web
-editor never recomputes the distance transform.
+inscribed circle) and its diameter in pixels, *not* the vertex mean or the
+bounding box. For an irregular/concave cell the vertex mean can drift or fall
+outside the shape, and a bounding box overstates the room available for a
+glyph; the incircle centre is where a glyph actually sits (and what navigation
+treats as the cell's location) and its diameter is the basis for the web
+editor's letter font size. Both are computed once at detection time from a
+single distance transform and **persisted** in the `.cwd` so the web editor
+never recomputes it.
 
 ## Types & serialization
 

@@ -26,8 +26,8 @@ Colour = tuple[int, int, int]
 
 # Annotations are free content drawn on top of the grid, a tagged union over
 # *kinds* (text, line, curve). Each carries an optional BGR ``colour`` (``None``
-# -> the editor's default black). Coordinates are normalized [0, 1] fractions of
-# the source image, like cell polygons. Persisted as JSON objects, e.g.
+# -> the editor's default black). Coordinates are source-image pixel positions,
+# like cell polygons. Persisted as JSON objects, e.g.
 # ``{"type": "text", "x": x, "y": y, "text": "..."}`` or
 # ``{"type": "line", "points": [[x, y], [x, y]], "colour": [b, g, r]}``; ``colour``
 # is omitted when ``None``. Mirrors web/src/annotations/types.ts.
@@ -93,7 +93,9 @@ def _colour_dict(colour: Colour | None) -> dict[str, Any]:
 _FORMAT_MAGIC = "gridfill"
 # Accepted on load so documents saved before the project's rename(s) still open.
 _LEGACY_FORMAT_MAGICS = {"crossword-transcriber", "inkwell"}
-_FORMAT_VERSION = 1
+# Bumped 1 -> 2 when coordinates switched from normalized [0, 1] fractions to
+# source-image pixels; version-1 documents are not supported (no migration).
+_FORMAT_VERSION = 2
 
 
 @dataclass
@@ -101,10 +103,10 @@ class Document:
     """The full editable state of a session: source image, grids, annotations.
 
     Annotations are a tagged union (:class:`TextAnnotation`,
-    :class:`LineAnnotation`, :class:`CurveAnnotation`) with coordinates
-    normalized to ``[0, 1]`` as fractions of the source image width/height -- the
-    same coordinate system as :class:`~gridfill.types.Cell` polygons -- and an
-    optional BGR ``colour`` (``None`` for the default black).
+    :class:`LineAnnotation`, :class:`CurveAnnotation`) with coordinates as
+    source-image pixel positions -- the same coordinate system as
+    :class:`~gridfill.types.Cell` polygons -- and an optional BGR ``colour``
+    (``None`` for the default black).
     """
 
     image: np.ndarray
@@ -144,6 +146,14 @@ def load_document(path: str | os.PathLike[str]) -> Document:
 
     if payload.get("format") not in {_FORMAT_MAGIC, *_LEGACY_FORMAT_MAGICS}:
         raise DocumentError(f"Not a gridfill document: {os.fspath(path)!r}")
+    if payload.get("version") != _FORMAT_VERSION:
+        # No migration path: versions before 2 stored normalized [0, 1]
+        # coordinates rather than source-image pixels, so silently loading one
+        # would misinterpret every coordinate rather than fail loudly.
+        raise DocumentError(
+            f"Unsupported document version {payload.get('version')!r} in "
+            f"{os.fspath(path)!r} (expected {_FORMAT_VERSION})"
+        )
 
     image_bytes = base64.b64decode(payload["image"]["data"])
     array = np.frombuffer(image_bytes, dtype=np.uint8)

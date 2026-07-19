@@ -28,13 +28,13 @@ def _sample_image() -> np.ndarray:
 def _sample_grid() -> RectangularGrid:
     cells = [
         Cell(
-            polygon=[(0.0, 0.0), (0.5, 0.0), (0.5, 0.5), (0.0, 0.5)],
+            polygon=[(0.0, 0.0), (15.0, 0.0), (15.0, 10.0), (0.0, 10.0)],
             kind=CellKind.LETTER,
             letter="A",
             background=(1, 2, 3),
             text_colour=(4, 5, 6),
         ),
-        Cell(polygon=[(0.5, 0.0), (1.0, 0.0), (1.0, 0.5), (0.5, 0.5)], kind=CellKind.BLOCK),
+        Cell(polygon=[(15.0, 0.0), (30.0, 0.0), (30.0, 10.0), (15.0, 10.0)], kind=CellKind.BLOCK),
     ]
     return RectangularGrid(rows=1, cols=2, cells=cells)
 
@@ -43,10 +43,10 @@ def test_document_round_trip(tmp_path: Path) -> None:
     image = _sample_image()
     grid = _sample_grid()
     annotations = [
-        TextAnnotation(0.15, 0.25, "hello", None),
-        TextAnnotation(0.35, 0.45, "world", (7, 8, 9)),
-        LineAnnotation([(0.1, 0.1), (0.4, 0.2)], (1, 2, 3)),
-        CurveAnnotation([(0.1, 0.1), (0.2, 0.3), (0.4, 0.25)], None),
+        TextAnnotation(4.5, 5.0, "hello", None),
+        TextAnnotation(10.5, 9.0, "world", (7, 8, 9)),
+        LineAnnotation([(3.0, 2.0), (12.0, 4.0)], (1, 2, 3)),
+        CurveAnnotation([(3.0, 2.0), (6.0, 6.0), (12.0, 5.0)], None),
     ]
     path = tmp_path / "doc.cwd"
 
@@ -71,19 +71,19 @@ def test_document_round_trip_no_annotations(tmp_path: Path) -> None:
 def test_default_colour_omitted_on_disk(tmp_path: Path) -> None:
     """A default (None) colour is not written, keeping documents clean."""
     path = tmp_path / "doc.cwd"
-    save_document(path, _sample_image(), [_sample_grid()], [TextAnnotation(0.1, 0.2, "hi", None)])
+    save_document(path, _sample_image(), [_sample_grid()], [TextAnnotation(3.0, 4.0, "hi", None)])
 
     payload = json.loads(path.read_text())
-    assert payload["annotations"] == [{"type": "text", "x": 0.1, "y": 0.2, "text": "hi"}]
+    assert payload["annotations"] == [{"type": "text", "x": 3.0, "y": 4.0, "text": "hi"}]
 
-    assert load_document(path).annotations == [TextAnnotation(0.1, 0.2, "hi", None)]
+    assert load_document(path).annotations == [TextAnnotation(3.0, 4.0, "hi", None)]
 
 
 def test_load_document_rejects_unknown_annotation_type(tmp_path: Path) -> None:
     path = tmp_path / "doc.cwd"
     save_document(path, _sample_image(), [_sample_grid()], [])
     payload = json.loads(path.read_text())
-    payload["annotations"] = [{"type": "sparkle", "x": 0.1, "y": 0.2}]
+    payload["annotations"] = [{"type": "sparkle", "x": 3.0, "y": 4.0}]
     path.write_text(json.dumps(payload))
     with pytest.raises(DocumentError):
         load_document(path)
@@ -92,5 +92,15 @@ def test_load_document_rejects_unknown_annotation_type(tmp_path: Path) -> None:
 def test_load_document_rejects_wrong_format(tmp_path: Path) -> None:
     path = tmp_path / "bad.cwd"
     path.write_text('{"format": "something-else"}')
+    with pytest.raises(DocumentError):
+        load_document(path)
+
+
+def test_load_document_rejects_unsupported_version(tmp_path: Path) -> None:
+    path = tmp_path / "doc.cwd"
+    save_document(path, _sample_image(), [_sample_grid()], [])
+    payload = json.loads(path.read_text())
+    payload["version"] = 1
+    path.write_text(json.dumps(payload))
     with pytest.raises(DocumentError):
         load_document(path)

@@ -8,7 +8,7 @@ const PNG_1x1 =
 function sampleDoc(): Cwd {
   return {
     format: "gridfill",
-    version: 1,
+    version: 2,
     image: { encoding: "png", data: PNG_1x1 },
     grids: [
       {
@@ -19,28 +19,30 @@ function sampleDoc(): Cwd {
           {
             polygon: [
               [0, 0],
-              [0.5, 0],
-              [0.5, 1],
-              [0, 1],
+              [50, 0],
+              [50, 100],
+              [0, 100],
             ],
             kind: "letter",
             letter: "A",
             background: [0, 255, 255],
             textColour: [0, 0, 200],
-            centre: [0.25, 0.5],
+            centre: [25, 50],
+            size: 40,
           },
           {
             polygon: [
-              [0.5, 0],
-              [1, 0],
-              [1, 1],
-              [0.5, 1],
+              [50, 0],
+              [100, 0],
+              [100, 100],
+              [50, 100],
             ],
             kind: "empty",
             letter: null,
             background: null,
             textColour: null,
             centre: null,
+            size: null,
           },
         ],
       },
@@ -49,24 +51,25 @@ function sampleDoc(): Cwd {
         cells: [
           {
             polygon: [
-              [0.1, 0.1],
-              [0.2, 0.1],
-              [0.15, 0.2],
+              [10, 10],
+              [20, 10],
+              [15, 20],
             ],
             kind: "empty",
             letter: null,
             background: null,
             textColour: null,
             centre: null,
+            size: null,
           },
         ],
       },
     ],
     annotations: [
-      { id: "a1", type: "text", colour: null, x: 0.3, y: 0.4, text: "note" },
-      { id: "a2", type: "text", colour: [0, 0, 255], x: 0.6, y: 0.7, text: "red note" },
-      { id: "a3", type: "line", colour: null, points: [[0.1, 0.1], [0.4, 0.2]] },
-      { id: "a4", type: "curve", colour: [10, 20, 30], points: [[0.1, 0.1], [0.2, 0.3], [0.4, 0.25]] },
+      { id: "a1", type: "text", colour: null, x: 30, y: 40, text: "note" },
+      { id: "a2", type: "text", colour: [0, 0, 255], x: 60, y: 70, text: "red note" },
+      { id: "a3", type: "line", colour: null, points: [[10, 10], [40, 20]] },
+      { id: "a4", type: "curve", colour: [10, 20, 30], points: [[10, 10], [20, 30], [40, 25]] },
     ],
   };
 }
@@ -93,17 +96,17 @@ describe("parseCwd / serializeCwd", () => {
   it("omits a default (null) colour on disk", () => {
     const doc = sampleDoc();
     const payload = JSON.parse(serializeCwd(doc));
-    expect(payload.annotations[0]).toEqual({ type: "text", x: 0.3, y: 0.4, text: "note" });
-    expect(payload.annotations[2]).toEqual({ type: "line", points: [[0.1, 0.1], [0.4, 0.2]] });
+    expect(payload.annotations[0]).toEqual({ type: "text", x: 30, y: 40, text: "note" });
+    expect(payload.annotations[2]).toEqual({ type: "line", points: [[10, 10], [40, 20]] });
   });
 
   it("rejects an unknown annotation type", () => {
     const bad = JSON.stringify({
       format: "gridfill",
-      version: 1,
+      version: 2,
       image: { encoding: "png", data: PNG_1x1 },
       grids: [],
-      annotations: [{ type: "sparkle", x: 0.1, y: 0.2 }],
+      annotations: [{ type: "sparkle", x: 10, y: 20 }],
     });
     expect(() => parseCwd(bad)).toThrow(CwdParseError);
   });
@@ -117,7 +120,7 @@ describe("parseCwd / serializeCwd", () => {
   it("accepts legacy format magics", () => {
     const legacy = JSON.stringify({
       format: "inkwell",
-      version: 1,
+      version: 2,
       image: { encoding: "png", data: PNG_1x1 },
       grids: [],
       annotations: [],
@@ -129,7 +132,7 @@ describe("parseCwd / serializeCwd", () => {
   it("defaults text colour for documents predating the field", () => {
     const legacy = JSON.stringify({
       format: "gridfill",
-      version: 1,
+      version: 2,
       image: { encoding: "png", data: PNG_1x1 },
       grids: [
         {
@@ -137,9 +140,9 @@ describe("parseCwd / serializeCwd", () => {
           cells: [
             {
               polygon: [
-                [0.1, 0.1],
-                [0.2, 0.1],
-                [0.15, 0.2],
+                [10, 10],
+                [20, 10],
+                [15, 20],
               ],
               kind: "letter",
               letter: "A",
@@ -153,6 +156,20 @@ describe("parseCwd / serializeCwd", () => {
     });
     const doc = parseCwd(legacy);
     expect(doc.grids[0]!.cells[0]!.textColour).toBeNull();
+  });
+
+  it("rejects a document version that predates pixel coordinates", () => {
+    // No migration path: version 1 documents stored normalized [0, 1]
+    // coordinates rather than source-image pixels, so silently loading one
+    // would misinterpret every coordinate rather than fail loudly.
+    const v1 = JSON.stringify({
+      format: "gridfill",
+      version: 1,
+      image: { encoding: "png", data: PNG_1x1 },
+      grids: [],
+      annotations: [],
+    });
+    expect(() => parseCwd(v1)).toThrow(CwdParseError);
   });
 
   it("rejects non-gridfill JSON", () => {

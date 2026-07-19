@@ -75,7 +75,7 @@ function irregularNeighbor(
   return best;
 }
 
-/** The grid's outer boundary, in the same normalized space as cell polygons.
+/** The grid's outer boundary, in the same pixel space as cell polygons.
  * Mirrors `RectangularGrid.bounding_polygon` / `IrregularGrid.bounding_polygon`. */
 export function boundingPolygon(grid: Grid): Point[] {
   if (grid.type === "rectangular") {

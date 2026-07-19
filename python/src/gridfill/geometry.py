@@ -51,26 +51,38 @@ def incircle(polygon_px: np.ndarray) -> tuple[float, float, int]:
     return cx, cy, max(1, int(round(2 * radius)))
 
 
-def polygon_centre(polygon: list[Point], resolution: int = 1024) -> Point:
-    """The polygon's incircle centre, in the same normalized ``[0, 1]`` space.
+def polygon_incircle(polygon: list[Point]) -> tuple[Point, float]:
+    """The polygon's incircle centre and diameter, in the same source-image
+    pixel space as *polygon*.
+
+    Thin wrapper around :func:`incircle` that takes/returns plain
+    ``(x, y)`` tuples instead of a numpy array, so a caller wanting centre and
+    diameter together (as :class:`~gridfill.types.Cell` does) pays for a single
+    distance transform rather than two.
+    """
+    polygon_px = np.asarray(polygon, dtype=np.float32)
+    cx, cy, diameter = incircle(polygon_px)
+    return (cx, cy), float(diameter)
+
+
+def polygon_centre(polygon: list[Point]) -> Point:
+    """The polygon's incircle centre, in the same pixel space as *polygon*.
 
     Preferred over the vertex mean for irregular cells: it returns the point
     deepest inside the polygon (where a glyph sits best and which navigation
     should treat as the cell's location), whereas a vertex mean drifts toward a
-    cluster of vertices and can even fall outside a concave shape. Rasterizes
-    the polygon at *resolution* pixels, takes its :func:`incircle` centre, and
-    maps back to ``[0, 1]``.
+    cluster of vertices and can even fall outside a concave shape.
     """
-    polygon_px = np.asarray(polygon, dtype=np.float32) * resolution
-    cx, cy, _ = incircle(polygon_px)
-    return cx / resolution, cy / resolution
+    centre, _ = polygon_incircle(polygon)
+    return centre
 
 
 def convex_hull(points: list[Point]) -> list[Point]:
     """Counter-clockwise convex hull of *points* (Andrew's monotone chain).
 
-    Pure Python (no cv2) so it works on normalized ``[0, 1]`` polygon vertices
-    without going through a pixel array.
+    Pure Python (no cv2) so it works on *points* in any coordinate space
+    (source-image pixels for a :class:`~gridfill.types.Cell` polygon) without
+    going through a pixel array.
     """
     pts = sorted(set(points))
     if len(pts) <= 2:

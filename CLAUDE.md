@@ -43,11 +43,17 @@ The frontend uses `npm` from `web/` (`npm install`, `npm run dev`, `npm test`).
 
 ## Conventions
 
-**Normalized coordinates.** Coordinates that get persisted to a `.cwd` document
-are always **normalized to `[0, 1]`** as fractions of the source image
-width/height — never raw pixels. This applies to both `Cell.polygon` vertices
-and text annotation `(x, y)` positions, so a document stays valid independent of
-the image's resolution.
+**Pixel coordinates.** Coordinates that get persisted to a `.cwd` document are
+always **source-image pixel positions** — never normalized fractions. This
+applies to `Cell.polygon` vertices, `Cell.centre` / `Cell.size` (the incircle
+centre and diameter), and text/line/curve annotation coordinates. Pixels were
+chosen over `[0, 1]` fractions because a *length* (like `Cell.size`) has no
+inherent x or y axis to be "a fraction of" — the source image's width and
+height generally differ, so there's no single, unambiguous way to normalize a
+scalar against them. Pixels sidestep that: every coordinate and every length
+uses the same unit, so the web viewport's image-to-canvas map is a single
+uniform scale (`web/src/canvas/viewport.ts`), not two different formulas for
+points versus lengths.
 
 **Colours are BGR.** Every colour that touches a `.cwd` document — cell
 `background`, cell `text_colour`, annotation `colour` — is an OpenCV **BGR**
@@ -78,3 +84,11 @@ editor needs no backend to read or write one. **Any change to the on-disk shape
 must be made in both files**, including the `format` magic and the
 `_LEGACY_FORMAT_MAGICS` / `LEGACY_FORMAT_MAGICS` set (the project was renamed
 `crossword-transcriber` → `inkwell` → `gridfill`, and old documents still load).
+
+A `version` integer (`_FORMAT_VERSION` in `document.py`, `FORMAT_VERSION` in
+`cwd.ts`) is also written and checked on load; both sides reject a document
+whose `version` doesn't match rather than silently misinterpreting it. Bump it
+on any change where an old document would parse but mean something different
+(e.g. version 2 switched coordinates from normalized `[0, 1]` to pixels) — not
+for an additive, always-optional field like `Cell.text_colour`, which old
+documents simply lack and both loaders already default.

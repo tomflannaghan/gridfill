@@ -8,9 +8,9 @@ import pytest
 
 from gridfill.detection import detect_grid
 from gridfill.errors import GridDetectionError
-from gridfill.geometry import incircle, polygon_centre
+from gridfill.geometry import incircle, polygon_centre, polygon_incircle
 from gridfill.preprocess import binarize, to_grayscale
-from gridfill.types import Cell, RectangularGrid
+from gridfill.types import RectangularGrid
 
 from .synthetic import make_grid
 
@@ -18,11 +18,6 @@ from .synthetic import make_grid
 def _detect(image: np.ndarray) -> RectangularGrid:
     binary = binarize(to_grayscale(image))
     return detect_grid(binary)
-
-
-def _corners_px(cell: Cell, image_shape: tuple[int, ...]) -> np.ndarray:
-    h, w = image_shape[:2]
-    return np.array([(x * w, y * h) for x, y in cell.polygon])
 
 
 @pytest.mark.parametrize("n_rows,n_cols", [(5, 5), (7, 7), (4, 6)])
@@ -37,7 +32,7 @@ def test_cell_boxes_match_expected_size() -> None:
     grid_img = make_grid(n_rows=5, n_cols=5, cell_px=60)
     grid = _detect(grid_img.image)
     for cell in grid.cells:
-        top_left, top_right, bottom_right, bottom_left = _corners_px(cell, grid_img.image.shape)
+        top_left, top_right, bottom_right, bottom_left = np.array(cell.polygon)
         width = (
             np.linalg.norm(top_right - top_left) + np.linalg.norm(bottom_right - bottom_left)
         ) / 2
@@ -54,8 +49,8 @@ def test_cells_tile_without_overlap() -> None:
     # Adjacent cells share an edge: each cell's right edge ~= next cell's left edge.
     for r in range(grid.rows):
         for c in range(grid.cols - 1):
-            left = _corners_px(grid.cell(r, c), grid_img.image.shape)
-            right = _corners_px(grid.cell(r, c + 1), grid_img.image.shape)
+            left = np.array(grid.cell(r, c).polygon)
+            right = np.array(grid.cell(r, c + 1).polygon)
             assert np.linalg.norm(left[1] - right[0]) <= 2  # left.TR ~= right.TL
             assert np.linalg.norm(left[2] - right[3]) <= 2  # left.BR ~= right.BL
 
@@ -103,17 +98,31 @@ def test_incircle_centre_is_interior(polygon: list[tuple[float, float]]) -> None
     assert signed >= diameter / 2 - 1.0
 
 
-def test_polygon_centre_is_interior_and_normalized() -> None:
+def test_polygon_centre_is_interior_for_concave_polygon() -> None:
     """``polygon_centre`` returns the incircle centre in the polygon's own
-    normalized [0, 1] space, strictly inside a concave (L-shaped) cell where the
-    vertex mean would fall in the missing corner."""
-    # An L-shape: the vertex mean sits near (0.4, 0.4), inside the cut-out notch.
-    poly = [(0.0, 0.0), (0.6, 0.0), (0.6, 0.3), (0.3, 0.3), (0.3, 0.6), (0.0, 0.6)]
+    pixel space, strictly inside a concave (L-shaped) cell where the vertex
+    mean would fall in the missing corner."""
+    # An L-shape (60x60px): the vertex mean sits near (24, 24), inside the
+    # cut-out notch.
+    poly = [(0.0, 0.0), (60.0, 0.0), (60.0, 30.0), (30.0, 30.0), (30.0, 60.0), (0.0, 60.0)]
     cx, cy = polygon_centre(poly)
-    assert 0.0 < cx < 1.0
-    assert 0.0 < cy < 1.0
+    assert 0.0 < cx < 60.0
+    assert 0.0 < cy < 60.0
     signed = cv2.pointPolygonTest(np.array(poly, dtype=np.float32), (cx, cy), True)
     assert signed > 0  # inside the polygon, not in the notch
+
+
+def test_polygon_incircle_matches_polygon_centre_and_diameter() -> None:
+    """``polygon_incircle`` returns the same centre as ``polygon_centre`` plus a
+    diameter consistent with a square's known incircle: its side length."""
+    # A 50x50px square: its incircle diameter equals the side length. Allow a
+    # couple of pixels' slack -- incircle's distance-transform mask carries a
+    # 1px zero border on every side, which inflates a small polygon's raster
+    # incircle by ~2px (negligible relative error at real cell sizes).
+    poly = [(20.0, 20.0), (70.0, 20.0), (70.0, 70.0), (20.0, 70.0)]
+    (cx, cy), diameter = polygon_incircle(poly)
+    assert (cx, cy) == polygon_centre(poly)
+    assert diameter == pytest.approx(50.0, abs=2.5)
 
 
 def test_raises_when_no_grid_present() -> None:

@@ -54,18 +54,33 @@ def test_rectangular_grid_bounding_polygon() -> None:
         return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
 
     cells = [
-        Cell(polygon=poly(0.0, 0.0, 0.5, 0.5)),
-        Cell(polygon=poly(0.5, 0.0, 1.0, 0.5)),
-        Cell(polygon=poly(0.0, 0.5, 0.5, 1.0)),
-        Cell(polygon=poly(0.5, 0.5, 1.0, 1.0)),
+        Cell(polygon=poly(0.0, 0.0, 50.0, 50.0)),
+        Cell(polygon=poly(50.0, 0.0, 100.0, 50.0)),
+        Cell(polygon=poly(0.0, 50.0, 50.0, 100.0)),
+        Cell(polygon=poly(50.0, 50.0, 100.0, 100.0)),
     ]
     grid = RectangularGrid(rows=2, cols=2, cells=cells)
-    assert grid.bounding_polygon() == [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+    assert grid.bounding_polygon() == [(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]
+
+
+def test_cell_size_is_incircle_diameter_of_polygon() -> None:
+    # A 50x50px square: its incircle diameter equals the side length (+/- a
+    # couple of pixels of raster slack -- see test_geometry.py).
+    cell = Cell(polygon=[(20.0, 20.0), (70.0, 20.0), (70.0, 70.0), (20.0, 70.0)])
+    assert cell.size == pytest.approx(50.0, abs=2.5)
+
+
+def test_cell_size_predating_the_field_is_recomputed_from_polygon() -> None:
+    # Loading an old document (no persisted "size") should backfill it, the
+    # same way a missing "centre" is backfilled, rather than staying None.
+    data = Cell(polygon=[(20.0, 20.0), (70.0, 20.0), (70.0, 70.0), (20.0, 70.0)]).to_dict()
+    del data["size"]
+    assert Cell.from_dict(data).size == pytest.approx(50.0, abs=2.5)
 
 
 def test_cell_round_trips_through_dict() -> None:
     cell = Cell(
-        polygon=[(0.0, 0.0), (0.5, 0.0), (0.5, 0.5), (0.0, 0.5)],
+        polygon=[(0.0, 0.0), (50.0, 0.0), (50.0, 50.0), (0.0, 50.0)],
         kind=CellKind.LETTER,
         letter="A",
         background=(10, 20, 30),
@@ -94,18 +109,18 @@ def test_irregular_grid_bounding_polygon_is_convex_hull() -> None:
     # Four small cells with a point poking outside their common bounding box; the
     # hull should wrap the outer extent, ignoring interior points.
     cells = [
-        Cell(polygon=[(0.0, 0.0), (0.2, 0.0), (0.1, 0.2)]),
-        Cell(polygon=[(1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]),
-        Cell(polygon=[(0.4, 0.4), (0.5, 0.4), (0.5, 0.5)]),
+        Cell(polygon=[(0.0, 0.0), (20.0, 0.0), (10.0, 20.0)]),
+        Cell(polygon=[(100.0, 0.0), (100.0, 100.0), (0.0, 100.0)]),
+        Cell(polygon=[(40.0, 40.0), (50.0, 40.0), (50.0, 50.0)]),
     ]
     hull = IrregularGrid(cells=cells).bounding_polygon()
-    assert set(hull) == {(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)}
+    assert set(hull) == {(0.0, 0.0), (100.0, 0.0), (100.0, 100.0), (0.0, 100.0)}
 
 
 def test_irregular_grid_round_trips_through_dict() -> None:
     cells = [
-        Cell(polygon=[(0.0, 0.0), (0.1, 0.0), (0.1, 0.1), (0.0, 0.1)], kind=CellKind.EMPTY),
-        Cell(polygon=[(0.2, 0.0), (0.3, 0.05), (0.25, 0.15)], kind=CellKind.LETTER, letter="X"),
+        Cell(polygon=[(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)], kind=CellKind.EMPTY),
+        Cell(polygon=[(20.0, 0.0), (30.0, 5.0), (25.0, 15.0)], kind=CellKind.LETTER, letter="X"),
     ]
     grid = IrregularGrid(cells=cells)
 

@@ -1,8 +1,8 @@
 /** Polygon geometry helpers, ported from python/src/gridfill/geometry.py.
  *
- * These operate on points in any consistent coordinate space (normalized
- * [0,1] fractions or pixels) as long as both the polygon and the test point
- * share it.
+ * These operate on points in any consistent coordinate space (source-image
+ * pixels for document geometry, canvas pixels for hit-testing) as long as
+ * both the polygon and the test point share it.
  */
 
 export type Point = [number, number];

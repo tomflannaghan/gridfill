@@ -146,11 +146,8 @@ def _rectify_quad(line_mask: np.ndarray, quad: np.ndarray) -> _RectifiedLattice:
     return _RectifiedLattice(line_mask=rectified, transform=transform, size=(width, height))
 
 
-def _polygon_from_box(
-    box: BoundingBox, inverse: np.ndarray, src_size: tuple[int, int]
-) -> list[Point]:
-    """Project a rectified-space box's 4 corners back to normalized source coords."""
-    src_w, src_h = src_size
+def _polygon_from_box(box: BoundingBox, inverse: np.ndarray) -> list[Point]:
+    """Project a rectified-space box's 4 corners back to source-image pixel coords."""
     corners = np.array(
         [[box.x, box.y], [box.x2, box.y], [box.x2, box.y2], [box.x, box.y2]],
         dtype=np.float64,
@@ -158,23 +155,16 @@ def _polygon_from_box(
     homogeneous = np.hstack([corners, np.ones((4, 1))])
     projected = homogeneous @ inverse.T
     projected = projected[:, :2] / projected[:, 2:3]
-    projected[:, 0] /= src_w
-    projected[:, 1] /= src_h
     return [(float(x), float(y)) for x, y in projected]
 
 
 def _build_rectangular_grid(
-    src_shape: tuple[int, ...], lattice: _RectifiedLattice, boxes: list[list[BoundingBox]]
+    lattice: _RectifiedLattice, boxes: list[list[BoundingBox]]
 ) -> RectangularGrid:
     """Turn a rectified lattice's cell boxes into a grid, projected onto the source image."""
     rows, cols = len(boxes), len(boxes[0])
     inverse = np.linalg.inv(lattice.transform)
-    src_h, src_w = src_shape[:2]
-    cells = [
-        Cell(polygon=_polygon_from_box(box, inverse, (src_w, src_h)))
-        for row in boxes
-        for box in row
-    ]
+    cells = [Cell(polygon=_polygon_from_box(box, inverse)) for row in boxes for box in row]
     return RectangularGrid(rows=rows, cols=cols, cells=cells)
 
 
@@ -247,7 +237,7 @@ def detect_rectangular_grids(binary: np.ndarray) -> list[RectangularGrid]:
             or abs(row_pitch - ref_row_pitch) > _PITCH_TOLERANCE * ref_row_pitch
         ):
             continue
-        grids.append(_build_rectangular_grid(binary.shape, lattice, boxes))
+        grids.append(_build_rectangular_grid(lattice, boxes))
     if not grids:
         raise GridDetectionError("No valid grid lattice found in image")
     return grids

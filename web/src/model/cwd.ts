@@ -5,7 +5,7 @@
  * plain JSON, so no backend is needed to read or write it:
  *
  *   {
- *     "format": "gridfill", "version": 1,
+ *     "format": "gridfill", "version": 2,
  *     "image": { "encoding": "png", "data": "<base64 PNG>" },
  *     "grids": [ <grid>, ... ],
  *     "annotations": [
@@ -15,10 +15,10 @@
  *     ]
  *   }
  *
- * Coordinates (cell polygon vertices and annotation points) are fractions of the
- * source image's (width, height), in [0, 1]. Cell `background` / `text_colour`
- * and an annotation's optional `colour` are BGR triples (omitted for the default
- * black). An annotation's in-memory `id` is not persisted.
+ * Coordinates (cell polygon vertices and annotation points) are source-image
+ * pixel positions. Cell `background` / `text_colour` and an annotation's
+ * optional `colour` are BGR triples (omitted for the default black). An
+ * annotation's in-memory `id` is not persisted.
  */
 
 import { polygonCentroid, type Point } from "./geometry.ts";
@@ -37,11 +37,17 @@ export interface Cell {
   /** OpenCV BGR triple the cell's letter is drawn in, or null for the default
    * (black). Persisted as `text_colour`. */
   textColour: [number, number, number] | null;
-  /** The cell's incircle centre (normalized [0,1]), precomputed and persisted
-   * by the Python library (`polygon_centre`). Where a glyph sits best and the
-   * point navigation treats as the cell's location. Null only for documents
-   * predating the field. Prefer `cellCentre()` to read it. */
+  /** The cell's incircle centre, in source-image pixels, precomputed and
+   * persisted by the Python library (`polygon_incircle`). Where a glyph sits
+   * best and the point navigation treats as the cell's location. Null only
+   * for documents predating the field. Prefer `cellCentre()` to read it. */
   centre: Point | null;
+  /** The cell's incircle diameter, in source-image pixels, precomputed and
+   * persisted by the Python library (`polygon_incircle`). Recover it on
+   * canvas with `imageLengthToCanvas`. The basis for the letter font size, so
+   * the frontend never recomputes a distance transform itself. Null only for
+   * documents predating the field. */
+  size: number | null;
 }
 
 /** The cell's persisted incircle centre, falling back to the vertex mean for
@@ -76,7 +82,10 @@ const FORMAT_MAGIC = "gridfill";
 // Accepted on load so documents saved before the project's rename(s) still open
 // (mirrors `_LEGACY_FORMAT_MAGICS` in document.py).
 const LEGACY_FORMAT_MAGICS = new Set(["crossword-transcriber", "inkwell"]);
-const FORMAT_VERSION = 1;
+// Bumped 1 -> 2 when coordinates switched from normalized [0, 1] fractions to
+// source-image pixels; version-1 documents are not supported (no migration;
+// mirrors `_FORMAT_VERSION` in document.py).
+const FORMAT_VERSION = 2;
 
 export class CwdParseError extends Error {}
 
@@ -103,6 +112,7 @@ function parseCell(raw: unknown): Cell {
     background,
     textColour,
     centre: c.centre == null ? null : asPoint(c.centre),
+    size: c.size == null ? null : Number(c.size),
   };
 }
 
@@ -175,6 +185,14 @@ export function parseCwd(text: string): Cwd {
   if (typeof format !== "string" || (format !== FORMAT_MAGIC && !LEGACY_FORMAT_MAGICS.has(format))) {
     throw new CwdParseError("Not a gridfill document");
   }
+  if (p.version !== FORMAT_VERSION) {
+    // No migration path: versions before 2 stored normalized [0, 1]
+    // coordinates rather than source-image pixels, so silently loading one
+    // would misinterpret every coordinate rather than fail loudly.
+    throw new CwdParseError(
+      `Unsupported document version ${String(p.version)} (expected ${FORMAT_VERSION})`,
+    );
+  }
   const image = p.image as Record<string, unknown> | undefined;
   if (!image || typeof image.data !== "string") {
     throw new CwdParseError("Document is missing its image");
@@ -185,7 +203,7 @@ export function parseCwd(text: string): Cwd {
     : [];
   return {
     format: FORMAT_MAGIC,
-    version: typeof p.version === "number" ? p.version : FORMAT_VERSION,
+    version: FORMAT_VERSION,
     image: { encoding: String(image.encoding ?? "png"), data: image.data },
     grids,
     annotations,
@@ -217,6 +235,7 @@ function gridToJson(grid: Grid): unknown {
     background: c.background == null ? null : [...c.background],
     text_colour: c.textColour == null ? null : [...c.textColour],
     centre: c.centre == null ? null : [c.centre[0], c.centre[1]],
+    size: c.size,
   }));
   if (grid.type === "rectangular") {
     return { type: "rectangular", rows: grid.rows, cols: grid.cols, cells };
