@@ -5,19 +5,19 @@
 import { useEffect, useRef } from "react";
 import { useEditor } from "../state/store.ts";
 import { saveCwd, exportImage } from "../lib/files.ts";
-import { confirmDiscardIfDirty, useOpenFile } from "../lib/useOpenFile.ts";
+import { confirmDiscardIfDirty } from "../lib/useOpenFile.ts";
 import { bgrToHex, contrastFg, hexToBgr } from "../model/colour.ts";
 import { IconFolderOpen, IconSave, IconDownload, IconPaintBucket, IconAspectRatio } from "./icons.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import logoUrl from "../assets/logo.svg";
 
 interface Props {
-  onError(message: string): void;
+  openFile(file: File): Promise<void>;
+  detecting: boolean;
 }
 
-export function MenuBar({ onError }: Props) {
+export function MenuBar({ openFile, detecting }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { openFile, detecting } = useOpenFile(onError);
   const highlightInputRef = useRef<HTMLInputElement>(null);
   const textColourInputRef = useRef<HTMLInputElement>(null);
   const doc = useEditor((s) => s.doc);

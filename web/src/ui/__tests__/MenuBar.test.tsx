@@ -46,6 +46,8 @@ function loadGrid(): void {
 const colourInputs = (container: HTMLElement) =>
   Array.from(container.querySelectorAll<HTMLInputElement>('input[type="color"]'));
 
+const openFile = () => Promise.resolve();
+
 describe("MenuBar colour pickers", () => {
   beforeEach(() => {
     loadGrid();
@@ -57,7 +59,7 @@ describe("MenuBar colour pickers", () => {
     s.selectCell(0, 0);
     const undoDepth = useEditor.getState().past.length;
 
-    const { container } = render(<MenuBar onError={() => {}} />);
+    const { container } = render(<MenuBar openFile={openFile} detecting={false} />);
     const [, highlightInput] = colourInputs(container);
     fireEvent.change(highlightInput!, { target: { value: "#00ff00" } });
 
@@ -67,7 +69,7 @@ describe("MenuBar colour pickers", () => {
 
   it("does nothing to the document when nothing is selected", () => {
     const before = useEditor.getState().doc;
-    const { container } = render(<MenuBar onError={() => {}} />);
+    const { container } = render(<MenuBar openFile={openFile} detecting={false} />);
     const [, highlightInput] = colourInputs(container);
     fireEvent.change(highlightInput!, { target: { value: "#00ff00" } });
 
@@ -81,7 +83,7 @@ describe("MenuBar colour pickers", () => {
     s.addAnnotation(line);
     s.selectAnnotation(line.id);
 
-    const { container } = render(<MenuBar onError={() => {}} />);
+    const { container } = render(<MenuBar openFile={openFile} detecting={false} />);
     const [textInput] = colourInputs(container);
     fireEvent.change(textInput!, { target: { value: "#0000ff" } });
 
@@ -92,7 +94,7 @@ describe("MenuBar colour pickers", () => {
     const s = useEditor.getState();
     s.selectCell(0, 0);
 
-    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    const { getByRole } = render(<MenuBar openFile={openFile} detecting={false} />);
     const applyHighlight = getByRole("button", { name: "Apply or clear highlight" });
 
     fireEvent.click(applyHighlight);
@@ -107,7 +109,7 @@ describe("MenuBar colour pickers", () => {
     s.setTextColour([10, 20, 30]);
     s.selectCell(0, 0);
 
-    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    const { getByRole } = render(<MenuBar openFile={openFile} detecting={false} />);
     fireEvent.click(getByRole("button", { name: "Apply text colour" }));
 
     expect(useEditor.getState().doc!.grids[0]!.cells[0]!.textColour).toEqual([10, 20, 30]);
@@ -122,7 +124,7 @@ describe("MenuBar document lifecycle", () => {
   });
 
   it("closes the document when the logo is clicked, with no unsaved changes", () => {
-    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    const { getByRole } = render(<MenuBar openFile={openFile} detecting={false} />);
     fireEvent.click(getByRole("button", { name: "Gridfill" }));
 
     expect(useEditor.getState().doc).toBeNull();
@@ -134,7 +136,7 @@ describe("MenuBar document lifecycle", () => {
     expect(useEditor.getState().dirty).toBe(true);
 
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    const { getByRole } = render(<MenuBar openFile={openFile} detecting={false} />);
     fireEvent.click(getByRole("button", { name: "Gridfill" }));
 
     expect(confirmSpy).toHaveBeenCalled();
@@ -150,7 +152,7 @@ describe("MenuBar document lifecycle", () => {
     useEditor.getState().typeChar("A");
 
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const { getByRole, container } = render(<MenuBar onError={() => {}} />);
+    const { getByRole, container } = render(<MenuBar openFile={openFile} detecting={false} />);
     const fileInput = container.querySelector<HTMLInputElement>("input.hidden-file-input")!;
     const clickSpy = vi.spyOn(fileInput, "click");
 
@@ -162,7 +164,7 @@ describe("MenuBar document lifecycle", () => {
 
   it("does not warn when opening a new file with no unsaved changes", () => {
     const confirmSpy = vi.spyOn(window, "confirm");
-    const { getByRole, container } = render(<MenuBar onError={() => {}} />);
+    const { getByRole, container } = render(<MenuBar openFile={openFile} detecting={false} />);
     const fileInput = container.querySelector<HTMLInputElement>("input.hidden-file-input")!;
     const clickSpy = vi.spyOn(fileInput, "click");
 
@@ -183,7 +185,7 @@ describe("MenuBar document lifecycle", () => {
     URL.revokeObjectURL = vi.fn();
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
-    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    const { getByRole } = render(<MenuBar openFile={openFile} detecting={false} />);
     fireEvent.click(getByRole("button", { name: "Save" }));
 
     expect(useEditor.getState().dirty).toBe(false);

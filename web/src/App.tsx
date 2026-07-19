@@ -80,7 +80,7 @@ export function App() {
     };
   }, []);
 
-  const { openFile } = useOpenFile(setError);
+  const { openFile, detecting } = useOpenFile(setError);
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -102,7 +102,7 @@ export function App() {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
-      <MenuBar onError={setError} />
+      <MenuBar openFile={openFile} detecting={detecting} />
       <main className="stage">
         {doc ? (
           <CanvasEditor />
@@ -140,6 +140,11 @@ export function App() {
           </div>
         )}
         {dragging && <div className="drop-overlay">Drop a .cwd/.pdf file to open</div>}
+        {detecting && (
+          <div className="loading-overlay">
+            <div className="spinner" role="status" aria-label="Detecting grid…" />
+          </div>
+        )}
       </main>
       {error && (
         <div className="error-toast" onClick={() => setError(null)}>
