@@ -2,7 +2,7 @@
  *
  * Open: read a `.cwd` file's text, parse it, and decode its embedded image.
  * Save: serialize the document and download it as a `.cwd`.
- * Export: render the filled grid (no editor chrome) to a PNG/JPEG download.
+ * Export: render the filled grid (no editor chrome) to a PNG download.
  */
 
 import { parseCwd, serializeCwd, imageDataUri, type Cwd } from "../model/cwd.ts";
@@ -51,15 +51,8 @@ export function saveCwd(doc: Cwd, fileName: string | null): void {
   triggerDownload(new Blob([serializeCwd(doc)], { type: "application/json" }), name);
 }
 
-export type ExportFormat = "png" | "jpeg";
-
-/** Render the finished grid at source-image resolution and download it. */
-export function exportImage(
-  doc: Cwd,
-  image: HTMLImageElement,
-  format: ExportFormat,
-  fileName: string | null,
-): void {
+/** Render the finished grid at source-image resolution and download it as a PNG. */
+export function exportImage(doc: Cwd, image: HTMLImageElement, fileName: string | null): void {
   const w = image.naturalWidth;
   const h = image.naturalHeight;
   const canvas = document.createElement("canvas");
@@ -68,22 +61,12 @@ export function exportImage(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Could not create an export canvas");
   const viewport = computeViewport(w, h, w, h); // scale 1, no offset
-  if (format === "jpeg") {
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, w, h);
-  }
   renderScene(ctx, { doc, viewport, image, selection: null, mode: "normal", showChrome: false });
 
-  const mime = format === "jpeg" ? "image/jpeg" : "image/png";
-  const ext = format === "jpeg" ? ".jpg" : ".png";
   const base = stripExtension(fileName ?? "crossword");
-  canvas.toBlob(
-    (blob) => {
-      if (blob) triggerDownload(blob, base + ext);
-    },
-    mime,
-    0.95,
-  );
+  canvas.toBlob((blob) => {
+    if (blob) triggerDownload(blob, base + ".png");
+  }, "image/png");
 }
 
 function stripExtension(name: string): string {

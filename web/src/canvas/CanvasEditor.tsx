@@ -487,7 +487,7 @@ export function CanvasEditor() {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         if (e.shiftKey) {
-          if (store.image) exportImage(store.doc, store.image.element, "png", store.fileName);
+          if (store.image) exportImage(store.doc, store.image.element, store.fileName);
         } else {
           saveCwd(store.doc, store.fileName);
         }
