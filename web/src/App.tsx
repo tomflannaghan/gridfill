@@ -5,6 +5,7 @@ import { confirmDiscardIfDirty, useOpenFile } from "./lib/useOpenFile.ts";
 import { loadAutosave, saveAutosave, clearAutosave } from "./lib/autosave.ts";
 import { MenuBar } from "./ui/MenuBar.tsx";
 import { CanvasEditor } from "./canvas/CanvasEditor.tsx";
+import { IconFolderOpen, IconSave, IconDownload } from "./ui/icons.tsx";
 import logoUrl from "./assets/logo.svg";
 
 /** Idle time after the last edit before it's written to auto-save storage. */
@@ -109,9 +110,33 @@ export function App() {
           <div className="empty-state">
             <img src={logoUrl} alt="" className="empty-logo" />
             <h1>Gridfill Editor</h1>
-            <p>Open a .pdf or image of a grid to start entering your solution. At any time, use the Save button to save your entry to a .cwd file. Use the Export button to export an image of the filled grid.</p>
-            <p>Open a .cwd file to continue entering into an existing document.</p>
-            <p className="hint">Use the Open icon, or drag a .cwd or .pdf file here.</p>
+            <ol className="empty-steps">
+              <li>
+                Open a <strong>.pdf or image</strong> of a crossword grid — with{" "}
+                <span className="inline-icon" title="Open" aria-label="Open">
+                  <IconFolderOpen />
+                </span>
+                , or by dragging the file here. Gridfill will detect the grid layout automatically.
+              </li>
+              <li>Click a cell and type to fill in your solution.</li>
+              <li>
+                Save your progress any time with{" "}
+                <span className="inline-icon" title="Save" aria-label="Save">
+                  <IconSave />
+                </span>
+                . This writes a <strong>.cwd</strong> file, which you can reopen with{" "}
+                <span className="inline-icon" title="Open" aria-label="Open">
+                  <IconFolderOpen />
+                </span>.
+              </li>
+              <li>
+                When you're done, use{" "}
+                <span className="inline-icon" title="Export image" aria-label="Export image">
+                  <IconDownload />
+                </span>{" "}
+                to export an image of the filled grid.
+              </li>
+            </ol>
           </div>
         )}
         {dragging && <div className="drop-overlay">Drop a .cwd/.pdf file to open</div>}
