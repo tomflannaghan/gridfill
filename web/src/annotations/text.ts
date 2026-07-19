@@ -4,7 +4,7 @@
 
 import { normToCanvas } from "../canvas/viewport.ts";
 import type { AnnotationKind } from "./kind.ts";
-import { annotationColor } from "./kind.ts";
+import { annotationColour } from "./kind.ts";
 import { annotationFontSize } from "./sizes.ts";
 import type { TextAnnotation } from "./types.ts";
 
@@ -18,7 +18,7 @@ export const textKind: AnnotationKind<TextAnnotation> = {
     ctx.font = textFont(annotationFontSize(vp));
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
-    ctx.fillStyle = annotationColor(a.color);
+    ctx.fillStyle = annotationColour(a.colour);
     const [x, y] = normToCanvas(vp, [a.x, a.y]);
     ctx.fillText(a.text, x, y);
   },

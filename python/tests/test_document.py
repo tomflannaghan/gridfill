@@ -32,7 +32,7 @@ def _sample_grid() -> RectangularGrid:
             kind=CellKind.LETTER,
             letter="A",
             background=(1, 2, 3),
-            text_color=(4, 5, 6),
+            text_colour=(4, 5, 6),
         ),
         Cell(polygon=[(0.5, 0.0), (1.0, 0.0), (1.0, 0.5), (0.5, 0.5)], kind=CellKind.BLOCK),
     ]

@@ -26,7 +26,7 @@ function sampleDoc(): Cwd {
             kind: "letter",
             letter: "A",
             background: [0, 255, 255],
-            textColor: [0, 0, 200],
+            textColour: [0, 0, 200],
             centre: [0.25, 0.5],
           },
           {
@@ -39,7 +39,7 @@ function sampleDoc(): Cwd {
             kind: "empty",
             letter: null,
             background: null,
-            textColor: null,
+            textColour: null,
             centre: null,
           },
         ],
@@ -56,17 +56,17 @@ function sampleDoc(): Cwd {
             kind: "empty",
             letter: null,
             background: null,
-            textColor: null,
+            textColour: null,
             centre: null,
           },
         ],
       },
     ],
     annotations: [
-      { id: "a1", type: "text", color: null, x: 0.3, y: 0.4, text: "note" },
-      { id: "a2", type: "text", color: [0, 0, 255], x: 0.6, y: 0.7, text: "red note" },
-      { id: "a3", type: "line", color: null, points: [[0.1, 0.1], [0.4, 0.2]] },
-      { id: "a4", type: "curve", color: [10, 20, 30], points: [[0.1, 0.1], [0.2, 0.3], [0.4, 0.25]] },
+      { id: "a1", type: "text", colour: null, x: 0.3, y: 0.4, text: "note" },
+      { id: "a2", type: "text", colour: [0, 0, 255], x: 0.6, y: 0.7, text: "red note" },
+      { id: "a3", type: "line", colour: null, points: [[0.1, 0.1], [0.4, 0.2]] },
+      { id: "a4", type: "curve", colour: [10, 20, 30], points: [[0.1, 0.1], [0.2, 0.3], [0.4, 0.25]] },
     ],
   };
 }
@@ -152,7 +152,7 @@ describe("parseCwd / serializeCwd", () => {
       annotations: [],
     });
     const doc = parseCwd(legacy);
-    expect(doc.grids[0]!.cells[0]!.textColor).toBeNull();
+    expect(doc.grids[0]!.cells[0]!.textColour).toBeNull();
   });
 
   it("rejects non-gridfill JSON", () => {

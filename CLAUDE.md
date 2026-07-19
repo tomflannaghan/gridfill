@@ -50,16 +50,19 @@ and text annotation `(x, y)` positions, so a document stays valid independent of
 the image's resolution.
 
 **Colours are BGR.** Every colour that touches a `.cwd` document — cell
-`background`, cell `text_color`, annotation `color` — is an OpenCV **BGR**
+`background`, cell `text_colour`, annotation `colour` — is an OpenCV **BGR**
 integer triple, not RGB. The default (black / no colour) is persisted as `null`.
 On the web side the BGR↔RGB swap lives in exactly one place
-([web/src/model/color.ts](web/src/model/color.ts)); don't scatter it.
+([web/src/model/colour.ts](web/src/model/colour.ts)); don't scatter it.
 
 **British spelling** in identifiers and prose (`centre`, `colour`, `neighbour`)
-— *except* where a value crosses the `.cwd` JSON boundary, which is deliberately
-American to match the format (`text_color`, `background`, `CellKind` values).
-So `Cell.centre` (British, an in-memory/geometry field) sits next to
-`text_color` (American, a serialized key) on purpose.
+throughout — **including every `.cwd` format key and its TypeScript/Python
+mirror** (`text_colour`/`textColour`, `colour`, never `text_color`/`textColor`/
+`color`). The only exceptions are spellings a browser API mandates verbatim —
+the DOM `<input type="color">` attribute, the CSS `color` property, the
+`currentColor` SVG/CSS keyword — which of course can't be renamed. When adding
+a persisted field, spell its key (and any in-memory field mirroring it) the
+British way on both sides.
 
 ## The `.cwd` format is mirrored in two languages
 

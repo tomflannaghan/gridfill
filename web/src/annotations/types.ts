@@ -2,7 +2,7 @@
  *
  * An annotation is free content drawn on top of the grid (text, lines, curves).
  * Every kind carries a stable in-memory `id` (used for selection and editing;
- * regenerated on load, never persisted) and an optional BGR `color` (null = the
+ * regenerated on load, never persisted) and an optional BGR `colour` (null = the
  * editor's default black). All coordinates are normalized [0,1] fractions of the
  * source image, like cell polygons — see CLAUDE.md and model/cwd.ts.
  *
@@ -13,12 +13,12 @@
  */
 
 import type { Point } from "../model/geometry.ts";
-import type { Bgr } from "../model/color.ts";
+import type { Bgr } from "../model/colour.ts";
 
 interface BaseAnnotation {
   id: string;
   /** BGR triple the annotation is drawn in, or null for the default (black). */
-  color: Bgr | null;
+  colour: Bgr | null;
 }
 
 /** Free text anchored at its top-left (x, y). */
@@ -49,14 +49,14 @@ export function newAnnotationId(): string {
   return crypto.randomUUID();
 }
 
-export function createText(x: number, y: number, text: string, color: Bgr | null): TextAnnotation {
-  return { id: newAnnotationId(), type: "text", color, x, y, text };
+export function createText(x: number, y: number, text: string, colour: Bgr | null): TextAnnotation {
+  return { id: newAnnotationId(), type: "text", colour, x, y, text };
 }
 
-export function createLine(p0: Point, p1: Point, color: Bgr | null): LineAnnotation {
-  return { id: newAnnotationId(), type: "line", color, points: [p0, p1] };
+export function createLine(p0: Point, p1: Point, colour: Bgr | null): LineAnnotation {
+  return { id: newAnnotationId(), type: "line", colour, points: [p0, p1] };
 }
 
-export function createCurve(points: Point[], color: Bgr | null): CurveAnnotation {
-  return { id: newAnnotationId(), type: "curve", color, points };
+export function createCurve(points: Point[], colour: Bgr | null): CurveAnnotation {
+  return { id: newAnnotationId(), type: "curve", colour, points };
 }

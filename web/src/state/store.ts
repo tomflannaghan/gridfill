@@ -9,7 +9,7 @@ import type { Cell, Cwd, Grid } from "../model/cwd.ts";
 import type { Annotation } from "../annotations/types.ts";
 import { neighbor, nextFillable, prevFillable, type Direction } from "../model/grid.ts";
 import { cellsInRect } from "../canvas/hitTest.ts";
-import { DEFAULT_HIGHLIGHT_BGR, DEFAULT_TEXT_BGR, persistedColor, type Bgr } from "../model/color.ts";
+import { DEFAULT_HIGHLIGHT_BGR, DEFAULT_TEXT_BGR, persistedColour, type Bgr } from "../model/colour.ts";
 
 export interface Selection {
   gridIndex: number;
@@ -47,7 +47,7 @@ export interface EditorState {
   mode: Mode;
   highlight: Bgr;
   /** Colour applied to newly typed letters and new annotations (default black). */
-  textColor: Bgr;
+  textColour: Bgr;
   /** When true, the view zooms to fit the grid of the current selection. A view
    * preference (not part of the document, not undoable). */
   zoomToGrid: boolean;
@@ -81,9 +81,9 @@ export interface EditorState {
   /** Apply the current highlight colour as the background of every selected cell. */
   applyHighlightToSelection(): void;
   /** Apply the current text colour to every selected cell's letter. */
-  applyTextColorToSelection(): void;
+  applyTextColourToSelection(): void;
   setHighlight(bgr: Bgr): void;
-  setTextColor(bgr: Bgr): void;
+  setTextColour(bgr: Bgr): void;
   setZoomToGrid(on: boolean): void;
 
   selectAnnotation(id: string | null): void;
@@ -165,7 +165,7 @@ export const useEditor = create<EditorState>((set, get) => {
     selectedAnnotationId: null,
     mode: "normal",
     highlight: DEFAULT_HIGHLIGHT_BGR,
-    textColor: DEFAULT_TEXT_BGR,
+    textColour: DEFAULT_TEXT_BGR,
     zoomToGrid: true,
     dirty: false,
     past: [],
@@ -263,12 +263,12 @@ export const useEditor = create<EditorState>((set, get) => {
     },
 
     typeChar(ch) {
-      const { doc, selection, mode, textColor } = get();
+      const { doc, selection, mode, textColour } = get();
       if (!doc || !selection) return;
       const cell = cellAt(doc, selection);
       if (!cell || cell.kind === "block") return;
       const char = normalizeChar(ch);
-      const color = persistedColor(textColor);
+      const colour = persistedColour(textColour);
 
       if (mode === "multiEntry") {
         set(
@@ -277,7 +277,7 @@ export const useEditor = create<EditorState>((set, get) => {
               ...c,
               kind: "letter",
               letter: (c.letter ?? "") + char,
-              textColor: color,
+              textColour: colour,
             })),
           ),
         );
@@ -288,7 +288,7 @@ export const useEditor = create<EditorState>((set, get) => {
         ...c,
         kind: "letter",
         letter: char,
-        textColor: color,
+        textColour: colour,
       }));
       const grid = next.grids[selection.gridIndex]!;
       const advance = nextFillable(grid, selection.cellIndex);
@@ -371,20 +371,20 @@ export const useEditor = create<EditorState>((set, get) => {
       set(commit(withCells(doc, targets, (c) => ({ ...c, background: [...highlight] as Bgr }))));
     },
 
-    applyTextColorToSelection() {
-      const { doc, textColor } = get();
+    applyTextColourToSelection() {
+      const { doc, textColour } = get();
       const targets = selectionTargets();
       if (!doc || targets.length === 0) return;
-      const color = persistedColor(textColor);
-      set(commit(withCells(doc, targets, (c) => ({ ...c, textColor: color }))));
+      const colour = persistedColour(textColour);
+      set(commit(withCells(doc, targets, (c) => ({ ...c, textColour: colour }))));
     },
 
     setHighlight(bgr) {
       set({ highlight: bgr });
     },
 
-    setTextColor(bgr) {
-      set({ textColor: bgr });
+    setTextColour(bgr) {
+      set({ textColour: bgr });
     },
 
     setZoomToGrid(on) {

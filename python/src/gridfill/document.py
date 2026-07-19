@@ -22,14 +22,14 @@ from .types import Grid, Point, grid_from_dict
 
 CWD_EXTENSION = ".cwd"
 
-Color = tuple[int, int, int]
+Colour = tuple[int, int, int]
 
 # Annotations are free content drawn on top of the grid, a tagged union over
-# *kinds* (text, line, curve). Each carries an optional BGR ``color`` (``None``
+# *kinds* (text, line, curve). Each carries an optional BGR ``colour`` (``None``
 # -> the editor's default black). Coordinates are normalized [0, 1] fractions of
 # the source image, like cell polygons. Persisted as JSON objects, e.g.
 # ``{"type": "text", "x": x, "y": y, "text": "..."}`` or
-# ``{"type": "line", "points": [[x, y], [x, y]], "color": [b, g, r]}``; ``color``
+# ``{"type": "line", "points": [[x, y], [x, y]], "colour": [b, g, r]}``; ``colour``
 # is omitted when ``None``. Mirrors web/src/annotations/types.ts.
 
 
@@ -40,7 +40,7 @@ class TextAnnotation:
     x: float
     y: float
     text: str
-    color: Color | None = None
+    colour: Colour | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -48,7 +48,7 @@ class TextAnnotation:
             "x": self.x,
             "y": self.y,
             "text": self.text,
-            **_color_dict(self.color),
+            **_colour_dict(self.colour),
         }
 
 
@@ -57,10 +57,14 @@ class LineAnnotation:
     """A straight line between two points."""
 
     points: list[Point]
-    color: Color | None = None
+    colour: Colour | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"type": "line", "points": [list(p) for p in self.points], **_color_dict(self.color)}
+        return {
+            "type": "line",
+            "points": [list(p) for p in self.points],
+            **_colour_dict(self.colour),
+        }
 
 
 @dataclass
@@ -68,22 +72,22 @@ class CurveAnnotation:
     """A smooth curve through its anchor points (>= 2)."""
 
     points: list[Point]
-    color: Color | None = None
+    colour: Colour | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "type": "curve",
             "points": [list(p) for p in self.points],
-            **_color_dict(self.color),
+            **_colour_dict(self.colour),
         }
 
 
 Annotation = TextAnnotation | LineAnnotation | CurveAnnotation
 
 
-def _color_dict(color: Color | None) -> dict[str, Any]:
-    """The ``color`` key, present only when the colour is not the default."""
-    return {} if color is None else {"color": list(color)}
+def _colour_dict(colour: Colour | None) -> dict[str, Any]:
+    """The ``colour`` key, present only when the colour is not the default."""
+    return {} if colour is None else {"colour": list(colour)}
 
 
 _FORMAT_MAGIC = "gridfill"
@@ -100,7 +104,7 @@ class Document:
     :class:`LineAnnotation`, :class:`CurveAnnotation`) with coordinates
     normalized to ``[0, 1]`` as fractions of the source image width/height -- the
     same coordinate system as :class:`~gridfill.types.Cell` polygons -- and an
-    optional BGR ``color`` (``None`` for the default black).
+    optional BGR ``colour`` (``None`` for the default black).
     """
 
     image: np.ndarray
@@ -154,15 +158,15 @@ def load_document(path: str | os.PathLike[str]) -> Document:
 
 def _annotation_from_json(o: dict[str, Any]) -> Annotation:
     """Parse one persisted annotation object into its :class:`Annotation`."""
-    raw = o.get("color")
-    color: Color | None = (int(raw[0]), int(raw[1]), int(raw[2])) if raw is not None else None
+    raw = o.get("colour")
+    colour: Colour | None = (int(raw[0]), int(raw[1]), int(raw[2])) if raw is not None else None
     kind = o.get("type")
     if kind == "text":
-        return TextAnnotation(float(o["x"]), float(o["y"]), str(o["text"]), color)
+        return TextAnnotation(float(o["x"]), float(o["y"]), str(o["text"]), colour)
     if kind == "line":
-        return LineAnnotation(_parse_points(o["points"]), color)
+        return LineAnnotation(_parse_points(o["points"]), colour)
     if kind == "curve":
-        return CurveAnnotation(_parse_points(o["points"]), color)
+        return CurveAnnotation(_parse_points(o["points"]), colour)
     raise DocumentError(f"Unknown annotation type: {kind!r}")
 
 

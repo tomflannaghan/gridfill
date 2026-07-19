@@ -3,7 +3,7 @@ import { StrictMode } from "react";
 import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import { AnnotationEditor, type AnnotationEdit } from "../AnnotationEditor.tsx";
 
-const EDIT: AnnotationEdit = { x: 10, y: 20, value: "", fontSize: 14, color: "#000000" };
+const EDIT: AnnotationEdit = { x: 10, y: 20, value: "", fontSize: 14, colour: "#000000" };
 
 /** Resolve after one animation frame, so the editor's deferred focus/blur-arm
  * effect has run. */

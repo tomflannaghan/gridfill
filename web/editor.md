@@ -79,9 +79,9 @@ a time, and **Enter** or **Escape** exits the mode.
 
 ## Highlighting
 
-**Ctrl+H** toggles a colored background on the selected cell (yellow by
+**Ctrl+H** toggles a coloured background on the selected cell (yellow by
 default); pressing it again removes the highlight. **Ctrl+Shift+H** opens a
-color picker to choose a different color for subsequent highlights.
+colour picker to choose a different colour for subsequent highlights.
 
 The **paintbrush** button beside the **Highlight** colour in the top bar applies
 that colour as the background of every selected cell (or the single selected

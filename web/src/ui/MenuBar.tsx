@@ -3,7 +3,7 @@
 import { useRef } from "react";
 import { useEditor } from "../state/store.ts";
 import { openCwdFile, saveCwd, exportImage } from "../lib/files.ts";
-import { bgrToHex, hexToBgr } from "../model/color.ts";
+import { bgrToHex, hexToBgr } from "../model/colour.ts";
 import logoUrl from "../assets/logo.svg";
 
 interface Props {
@@ -33,7 +33,7 @@ export function MenuBar({ onError }: Props) {
   const doc = useEditor((s) => s.doc);
   const fileName = useEditor((s) => s.fileName);
   const highlight = useEditor((s) => s.highlight);
-  const textColor = useEditor((s) => s.textColor);
+  const textColour = useEditor((s) => s.textColour);
   const zoomToGrid = useEditor((s) => s.zoomToGrid);
   const selection = useEditor((s) => s.selection);
   const selectedCells = useEditor((s) => s.selectedCells);
@@ -115,8 +115,8 @@ export function MenuBar({ onError }: Props) {
         Text
         <input
           type="color"
-          value={bgrToHex(textColor)}
-          onChange={(e) => useEditor.getState().setTextColor(hexToBgr(e.target.value))}
+          value={bgrToHex(textColour)}
+          onChange={(e) => useEditor.getState().setTextColour(hexToBgr(e.target.value))}
         />
         <button
           type="button"
@@ -124,7 +124,7 @@ export function MenuBar({ onError }: Props) {
           disabled={!hasSelection}
           title="Apply text colour to selection"
           aria-label="Apply text colour to selection"
-          onClick={() => useEditor.getState().applyTextColorToSelection()}
+          onClick={() => useEditor.getState().applyTextColourToSelection()}
         >
           <PaintbrushIcon />
         </button>
