@@ -43,8 +43,13 @@ _MAX_CELL_AREA_FRAC = 0.2
 _SIZE_BAND_LO = 0.4
 _SIZE_BAND_HI = 2.5
 
-# Bridge distance (px) used to decide two cells are adjacent across a thin wall.
-_ADJ_DILATE = 6
+# Safety slack (px) added to the measured wall thickness when sizing the
+# adjacency bridge -- covers anti-aliasing/thresholding jitter around the edge
+# of the line.
+_ADJ_DILATE_MARGIN = 2
+# Runs longer than this are assumed to be a filled cell or page border, not a
+# lattice line, and are excluded when estimating the line thickness.
+_MAX_PLAUSIBLE_LINE_PX = 60
 # A lattice needs at least this many cells to count as a grid.
 _MIN_CELLS = 4
 
@@ -54,6 +59,49 @@ _APPROX_EPS_RATIO = 0.02
 _CELL_ROW_BAND = 0.5
 # Reading-order row band for whole grids, as a fraction of image height.
 _GRID_ROW_BAND = 0.15
+
+
+def _run_lengths(mask: np.ndarray) -> np.ndarray:
+    """Lengths of every maximal run of truthy values along each row of *mask*
+    and, via transpose, each column."""
+    lengths = []
+    for arr in (mask, mask.T):
+        padded = np.pad(arr.astype(np.int8), ((0, 0), (1, 1)))
+        diffs = np.diff(padded, axis=1)
+        starts = np.argwhere(diffs == 1)
+        ends = np.argwhere(diffs == -1)
+        lengths.append(ends[:, 1] - starts[:, 1])
+    return np.concatenate(lengths)
+
+
+def _estimate_line_thickness(binary: np.ndarray) -> float:
+    """Estimate the lattice's typical stroke width, in pixels, as the modal
+    run-length of contiguous ink across rows and columns.
+
+    Sizing the gap-closing/adjacency steps off a measurement of *this* image,
+    rather than a fixed pixel constant, is what makes detection robust to the
+    image's resolution: a scan at twice the DPI has lines (and the gaps between
+    them) at roughly twice the pixel width.
+    """
+    lengths = _run_lengths(binary > 0)
+    lengths = lengths[(lengths >= 1) & (lengths <= _MAX_PLAUSIBLE_LINE_PX)]
+    if lengths.size == 0:
+        return 1.0
+    return float(np.argmax(np.bincount(lengths)))
+
+
+def _adjacency_bridge(line_thickness: float) -> int:
+    """Pixel radius :func:`_build_adjacency` must dilate one side of a wall by
+    to cross it, for a lattice whose ink is *line_thickness* px wide.
+
+    ``_label_regions`` first closes small ink gaps by dilating the ink itself,
+    which thickens every wall by ``2 * per_side_growth`` (that much on each
+    side). Because adjacency only grows *one* of the two cells across the gap,
+    it must reach the *whole* post-close wall, not just half of it.
+    """
+    per_side_growth = ((_GAP_CLOSE_KERNEL - 1) // 2) * _GAP_CLOSE_ITERS
+    post_close_thickness = line_thickness + 2 * per_side_growth
+    return int(np.ceil(post_close_thickness)) + _ADJ_DILATE_MARGIN
 
 
 def _label_regions(binary: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -111,23 +159,22 @@ def _select_cells(labels: np.ndarray, stats: np.ndarray) -> list[int]:
 
 
 def _build_adjacency(
-    labels: np.ndarray, stats: np.ndarray, cells: list[int]
+    labels: np.ndarray, stats: np.ndarray, cells: list[int], bridge: int
 ) -> dict[int, set[int]]:
     """Adjacency graph over *cells*: two cells are neighbours when their regions
-    are separated only by a thin wall (found by dilating one across the wall)."""
+    are separated only by a thin wall (found by dilating one across the wall by
+    *bridge* pixels -- see :func:`_adjacency_bridge` for how that's sized)."""
     height, width = labels.shape
     cell_set = set(cells)
     adjacency: dict[int, set[int]] = {label: set() for label in cells}
-    kernel = cv2.getStructuringElement(
-        cv2.MORPH_ELLIPSE, (2 * _ADJ_DILATE + 1, 2 * _ADJ_DILATE + 1)
-    )
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * bridge + 1, 2 * bridge + 1))
     for label in cells:
         x = int(stats[label, cv2.CC_STAT_LEFT])
         y = int(stats[label, cv2.CC_STAT_TOP])
         w = int(stats[label, cv2.CC_STAT_WIDTH])
         h = int(stats[label, cv2.CC_STAT_HEIGHT])
-        x0, y0 = max(0, x - _ADJ_DILATE), max(0, y - _ADJ_DILATE)
-        x1, y1 = min(width, x + w + _ADJ_DILATE), min(height, y + h + _ADJ_DILATE)
+        x0, y0 = max(0, x - bridge), max(0, y - bridge)
+        x1, y1 = min(width, x + w + bridge), min(height, y + h + bridge)
         sub = labels[y0:y1, x0:x1]
         grown = cv2.dilate((sub == label).astype(np.uint8), kernel)
         for other in np.unique(sub[(grown > 0) & (sub != label)]):
@@ -198,7 +245,8 @@ def detect_irregular_grids(binary: np.ndarray) -> list[IrregularGrid]:
     if not cells:
         raise GridDetectionError("No cell-like regions found in image")
 
-    adjacency = _build_adjacency(labels, stats, cells)
+    bridge = _adjacency_bridge(_estimate_line_thickness(binary))
+    adjacency = _build_adjacency(labels, stats, cells, bridge)
     groups = [g for g in _connected_groups(cells, adjacency) if len(g) >= _MIN_CELLS]
     if not groups:
         raise GridDetectionError("No irregular grid (adjacent same-size cells) found in image")
