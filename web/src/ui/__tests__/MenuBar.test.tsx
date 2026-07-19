@@ -58,7 +58,7 @@ describe("MenuBar colour pickers", () => {
     const undoDepth = useEditor.getState().past.length;
 
     const { container } = render(<MenuBar onError={() => {}} />);
-    const [highlightInput] = colourInputs(container);
+    const [, highlightInput] = colourInputs(container);
     fireEvent.change(highlightInput!, { target: { value: "#00ff00" } });
 
     expect(useEditor.getState().doc!.grids[0]!.cells[0]!.background).toEqual([0, 255, 0]);
@@ -68,7 +68,7 @@ describe("MenuBar colour pickers", () => {
   it("does nothing to the document when nothing is selected", () => {
     const before = useEditor.getState().doc;
     const { container } = render(<MenuBar onError={() => {}} />);
-    const [highlightInput] = colourInputs(container);
+    const [, highlightInput] = colourInputs(container);
     fireEvent.change(highlightInput!, { target: { value: "#00ff00" } });
 
     expect(useEditor.getState().doc).toBe(before);
@@ -82,9 +82,21 @@ describe("MenuBar colour pickers", () => {
     s.selectAnnotation(line.id);
 
     const { container } = render(<MenuBar onError={() => {}} />);
-    const [, textInput] = colourInputs(container);
+    const [textInput] = colourInputs(container);
     fireEvent.change(textInput!, { target: { value: "#0000ff" } });
 
     expect(useEditor.getState().doc!.annotations[0]!.colour).toEqual([255, 0, 0]);
+  });
+
+  it("clears the highlight of the selected cell via the Clear highlight button", () => {
+    const s = useEditor.getState();
+    s.selectCell(0, 0);
+    s.applyHighlightToSelection();
+    expect(useEditor.getState().doc!.grids[0]!.cells[0]!.background).not.toBeNull();
+
+    const { getByRole } = render(<MenuBar onError={() => {}} />);
+    fireEvent.click(getByRole("button", { name: "Clear highlight" }));
+
+    expect(useEditor.getState().doc!.grids[0]!.cells[0]!.background).toBeNull();
   });
 });

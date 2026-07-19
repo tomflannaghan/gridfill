@@ -66,8 +66,8 @@ function sampleDoc(): Cwd {
       },
     ],
     annotations: [
-      { id: "a1", type: "text", colour: null, x: 30, y: 40, text: "note" },
-      { id: "a2", type: "text", colour: [0, 0, 255], x: 60, y: 70, text: "red note" },
+      { id: "a1", type: "text", colour: null, x: 30, y: 40, text: "note", fontSize: null },
+      { id: "a2", type: "text", colour: [0, 0, 255], x: 60, y: 70, text: "red note", fontSize: 18 },
       { id: "a3", type: "line", colour: null, points: [[10, 10], [40, 20]] },
       { id: "a4", type: "curve", colour: [10, 20, 30], points: [[10, 10], [20, 30], [40, 25]] },
     ],
@@ -98,6 +98,13 @@ describe("parseCwd / serializeCwd", () => {
     const payload = JSON.parse(serializeCwd(doc));
     expect(payload.annotations[0]).toEqual({ type: "text", x: 30, y: 40, text: "note" });
     expect(payload.annotations[2]).toEqual({ type: "line", points: [[10, 10], [40, 20]] });
+  });
+
+  it("persists a text annotation's font size, omitting it when null", () => {
+    const doc = sampleDoc();
+    const payload = JSON.parse(serializeCwd(doc));
+    expect(payload.annotations[0].font_size).toBeUndefined();
+    expect(payload.annotations[1].font_size).toBe(18);
   });
 
   it("rejects an unknown annotation type", () => {

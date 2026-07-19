@@ -27,6 +27,9 @@ export interface TextAnnotation extends BaseAnnotation {
   x: number;
   y: number;
   text: string;
+  /** Font size, source-image pixels. Null for documents predating this field,
+   * which fall back to a viewport-relative default (see annotations/sizes.ts). */
+  fontSize: number | null;
 }
 
 /** A straight line between two points. */
@@ -49,8 +52,14 @@ export function newAnnotationId(): string {
   return crypto.randomUUID();
 }
 
-export function createText(x: number, y: number, text: string, colour: Bgr | null): TextAnnotation {
-  return { id: newAnnotationId(), type: "text", colour, x, y, text };
+export function createText(
+  x: number,
+  y: number,
+  text: string,
+  colour: Bgr | null,
+  fontSize: number | null = null,
+): TextAnnotation {
+  return { id: newAnnotationId(), type: "text", colour, x, y, text, fontSize };
 }
 
 export function createLine(p0: Point, p1: Point, colour: Bgr | null): LineAnnotation {

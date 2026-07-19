@@ -2,7 +2,7 @@
  * geometry handles — it is moved by dragging its body and its text is edited via
  * the inline editor (double-click). */
 
-import { imageToCanvas } from "../canvas/viewport.ts";
+import { imageLengthToCanvas, imageToCanvas, type Viewport } from "../canvas/viewport.ts";
 import type { AnnotationKind } from "./kind.ts";
 import { annotationColour } from "./kind.ts";
 import { annotationFontSize } from "./sizes.ts";
@@ -13,9 +13,16 @@ export function textFont(fontSize: number): string {
   return `500 ${fontSize}px system-ui, sans-serif`;
 }
 
+/** The canvas-pixel font size for `a`: its own persisted size, converted from
+ * source-image pixels, or the legacy viewport-relative default for
+ * annotations that predate the `fontSize` field. */
+export function canvasFontSize(vp: Viewport, a: TextAnnotation): number {
+  return a.fontSize != null ? imageLengthToCanvas(vp, a.fontSize) : annotationFontSize(vp);
+}
+
 export const textKind: AnnotationKind<TextAnnotation> = {
   render(ctx, vp, a) {
-    ctx.font = textFont(annotationFontSize(vp));
+    ctx.font = textFont(canvasFontSize(vp, a));
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillStyle = annotationColour(a.colour);
@@ -29,7 +36,7 @@ export const textKind: AnnotationKind<TextAnnotation> = {
   },
 
   bounds(ctx, vp, a) {
-    const fontSize = annotationFontSize(vp);
+    const fontSize = canvasFontSize(vp, a);
     ctx.font = textFont(fontSize);
     const [x, y] = imageToCanvas(vp, [a.x, a.y]);
     return [x, y, ctx.measureText(a.text).width, fontSize];

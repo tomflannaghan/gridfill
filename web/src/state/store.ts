@@ -10,6 +10,7 @@ import type { Annotation } from "../annotations/types.ts";
 import { neighbor, nextFillable, prevFillable, type Direction } from "../model/grid.ts";
 import { cellsInRect } from "../canvas/hitTest.ts";
 import { DEFAULT_HIGHLIGHT_BGR, DEFAULT_TEXT_BGR, persistedColour, type Bgr } from "../model/colour.ts";
+import { DEFAULT_TEXT_ANNOTATION_SIZE, defaultTextAnnotationSize } from "../annotations/sizes.ts";
 
 export interface Selection {
   gridIndex: number;
@@ -48,6 +49,9 @@ export interface EditorState {
   highlight: Bgr;
   /** Colour applied to newly typed letters and new annotations (default black). */
   textColour: Bgr;
+  /** Font size (source-image pixels) applied to newly created text annotations.
+   * Seeded from the first grid's letter size on load. */
+  textSize: number;
   /** When true, the view zooms to fit the grid of the current selection. A view
    * preference (not part of the document, not undoable). */
   zoomToGrid: boolean;
@@ -80,10 +84,15 @@ export interface EditorState {
   toggleHighlight(): void;
   /** Apply the current highlight colour as the background of every selected cell. */
   applyHighlightToSelection(): void;
+  /** Remove the background of every selected cell. */
+  clearHighlightFromSelection(): void;
   /** Apply the current text colour to every selected cell's letter. */
   applyTextColourToSelection(): void;
+  /** Apply the current text size to the selected text annotation, if any. */
+  applyTextSizeToSelection(): void;
   setHighlight(bgr: Bgr): void;
   setTextColour(bgr: Bgr): void;
+  setTextSize(size: number): void;
   setZoomToGrid(on: boolean): void;
 
   selectAnnotation(id: string | null): void;
@@ -166,6 +175,7 @@ export const useEditor = create<EditorState>((set, get) => {
     mode: "normal",
     highlight: DEFAULT_HIGHLIGHT_BGR,
     textColour: DEFAULT_TEXT_BGR,
+    textSize: DEFAULT_TEXT_ANNOTATION_SIZE,
     zoomToGrid: true,
     dirty: false,
     past: [],
@@ -180,6 +190,7 @@ export const useEditor = create<EditorState>((set, get) => {
         selectedCells: [],
         selectedAnnotationId: null,
         mode: "normal",
+        textSize: defaultTextAnnotationSize(doc),
         dirty: false,
         past: [],
         future: [],
@@ -371,6 +382,13 @@ export const useEditor = create<EditorState>((set, get) => {
       set(commit(withCells(doc, targets, (c) => ({ ...c, background: [...highlight] as Bgr }))));
     },
 
+    clearHighlightFromSelection() {
+      const { doc } = get();
+      const targets = selectionTargets();
+      if (!doc || targets.length === 0) return;
+      set(commit(withCells(doc, targets, (c) => ({ ...c, background: null }))));
+    },
+
     applyTextColourToSelection() {
       const { doc, textColour, selectedAnnotationId } = get();
       if (!doc) return;
@@ -389,12 +407,27 @@ export const useEditor = create<EditorState>((set, get) => {
       set(commit(withCells(doc, targets, (c) => ({ ...c, textColour: colour }))));
     },
 
+    applyTextSizeToSelection() {
+      const { doc, textSize, selectedAnnotationId } = get();
+      if (!doc || selectedAnnotationId === null) return;
+      const target = doc.annotations.find((a) => a.id === selectedAnnotationId);
+      if (!target || target.type !== "text") return;
+      const annotations = doc.annotations.map((a) =>
+        a.id === selectedAnnotationId ? { ...a, fontSize: textSize } : a,
+      );
+      set(commit({ ...doc, annotations }));
+    },
+
     setHighlight(bgr) {
       set({ highlight: bgr });
     },
 
     setTextColour(bgr) {
       set({ textColour: bgr });
+    },
+
+    setTextSize(size) {
+      set({ textSize: size });
     },
 
     setZoomToGrid(on) {

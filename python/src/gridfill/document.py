@@ -28,9 +28,9 @@ Colour = tuple[int, int, int]
 # *kinds* (text, line, curve). Each carries an optional BGR ``colour`` (``None``
 # -> the editor's default black). Coordinates are source-image pixel positions,
 # like cell polygons. Persisted as JSON objects, e.g.
-# ``{"type": "text", "x": x, "y": y, "text": "..."}`` or
+# ``{"type": "text", "x": x, "y": y, "text": "...", "font_size": n}`` or
 # ``{"type": "line", "points": [[x, y], [x, y]], "colour": [b, g, r]}``; ``colour``
-# is omitted when ``None``. Mirrors web/src/annotations/types.ts.
+# and ``font_size`` are omitted when ``None``. Mirrors web/src/annotations/types.ts.
 
 
 @dataclass
@@ -41,6 +41,9 @@ class TextAnnotation:
     y: float
     text: str
     colour: Colour | None = None
+    # Source-image pixels; None for documents predating this field, which the
+    # web editor falls back to a viewport-relative default size for.
+    font_size: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -48,6 +51,7 @@ class TextAnnotation:
             "x": self.x,
             "y": self.y,
             "text": self.text,
+            **({} if self.font_size is None else {"font_size": self.font_size}),
             **_colour_dict(self.colour),
         }
 
@@ -195,7 +199,14 @@ def _annotation_from_json(o: dict[str, Any]) -> Annotation:
     colour: Colour | None = (int(raw[0]), int(raw[1]), int(raw[2])) if raw is not None else None
     kind = o.get("type")
     if kind == "text":
-        return TextAnnotation(float(o["x"]), float(o["y"]), str(o["text"]), colour)
+        font_size = o.get("font_size")
+        return TextAnnotation(
+            float(o["x"]),
+            float(o["y"]),
+            str(o["text"]),
+            colour,
+            None if font_size is None else float(font_size),
+        )
     if kind == "line":
         return LineAnnotation(_parse_points(o["points"]), colour)
     if kind == "curve":

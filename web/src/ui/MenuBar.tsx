@@ -1,13 +1,20 @@
 /** Top bar: an icon-only toolbar — file actions (Open / Save / Export), the
- * annotation tool palette, the highlight/text colour swatches, and the
- * "zoom to grid" view toggle. */
+ * annotation tool palette, the text/highlight colour swatches with a clear-
+ * highlight button, and the "zoom to grid" view toggle. */
 
 import { useEffect, useRef, useState } from "react";
 import { useEditor } from "../state/store.ts";
 import { openCwdFile, saveCwd, exportImage } from "../lib/files.ts";
 import { detectFromImage } from "../lib/backend.ts";
 import { bgrToHex, contrastFg, hexToBgr } from "../model/colour.ts";
-import { IconFolderOpen, IconSave, IconDownload, IconPaintBucket, IconAspectRatio } from "./icons.tsx";
+import {
+  IconFolderOpen,
+  IconSave,
+  IconDownload,
+  IconPaintBucket,
+  IconSlashCircle,
+  IconAspectRatio,
+} from "./icons.tsx";
 import { Toolbar } from "./Toolbar.tsx";
 import logoUrl from "../assets/logo.svg";
 
@@ -26,6 +33,9 @@ export function MenuBar({ onError }: Props) {
   const textColour = useEditor((s) => s.textColour);
   const zoomToGrid = useEditor((s) => s.zoomToGrid);
   const dirty = useEditor((s) => s.dirty);
+  const selection = useEditor((s) => s.selection);
+  const selectedCells = useEditor((s) => s.selectedCells);
+  const hasSelection = selection !== null || selectedCells.length > 0;
 
   // Picking a colour applies it to the current selection immediately, in
   // addition to becoming the colour used for subsequent typing/annotations.
@@ -129,6 +139,26 @@ export function MenuBar({ onError }: Props) {
       <button
         type="button"
         className="colour-swatch"
+        style={{ background: bgrToHex(textColour), color: contrastFg(textColour) }}
+        title="Text colour — applies to the current selection"
+        aria-label="Text colour"
+        onClick={() => textColourInputRef.current?.click()}
+      >
+        <span className="colour-swatch-glyph" aria-hidden="true">
+          T
+        </span>
+      </button>
+      <input
+        ref={textColourInputRef}
+        type="color"
+        className="hidden-color-input"
+        value={bgrToHex(textColour)}
+        onChange={(e) => useEditor.getState().setTextColour(hexToBgr(e.target.value))}
+      />
+
+      <button
+        type="button"
+        className="colour-swatch"
         style={{ background: bgrToHex(highlight), color: contrastFg(highlight) }}
         title="Highlight (cell background) colour — applies to the current selection"
         aria-label="Highlight colour"
@@ -146,23 +176,14 @@ export function MenuBar({ onError }: Props) {
 
       <button
         type="button"
-        className="colour-swatch"
-        style={{ background: bgrToHex(textColour), color: contrastFg(textColour) }}
-        title="Text colour — applies to the current selection"
-        aria-label="Text colour"
-        onClick={() => textColourInputRef.current?.click()}
+        className="icon-btn"
+        disabled={!hasSelection}
+        onClick={() => useEditor.getState().clearHighlightFromSelection()}
+        title="Clear highlight — removes the background of the current selection"
+        aria-label="Clear highlight"
       >
-        <span className="colour-swatch-glyph" aria-hidden="true">
-          T
-        </span>
+        <IconSlashCircle />
       </button>
-      <input
-        ref={textColourInputRef}
-        type="color"
-        className="hidden-color-input"
-        value={bgrToHex(textColour)}
-        onChange={(e) => useEditor.getState().setTextColour(hexToBgr(e.target.value))}
-      />
 
       <span className="menubar-divider" />
 

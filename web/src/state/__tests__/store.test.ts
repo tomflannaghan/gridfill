@@ -280,3 +280,44 @@ describe("apply colour to selection", () => {
     expect(useEditor.getState().doc).toBe(before);
   });
 });
+
+describe("apply text size to selection", () => {
+  beforeEach(loadGrid);
+
+  it("resizes the selected text annotation in one undo step", () => {
+    const s = useEditor.getState();
+    const text = createText(10, 20, "hi", null);
+    s.addAnnotation(text);
+    s.selectAnnotation(text.id);
+    s.setTextSize(30);
+    const undoDepth = useEditor.getState().past.length;
+
+    s.applyTextSizeToSelection();
+    expect(useEditor.getState().doc!.annotations[0]!.type).toBe("text");
+    const updated = useEditor.getState().doc!.annotations[0] as typeof text;
+    expect(updated.fontSize).toBe(30);
+    expect(useEditor.getState().past.length).toBe(undoDepth + 1); // single step
+
+    useEditor.getState().undo();
+    expect((useEditor.getState().doc!.annotations[0] as typeof text).fontSize).toBeNull();
+  });
+
+  it("does nothing when the selected annotation isn't text", () => {
+    const s = useEditor.getState();
+    const line = createLine([0, 0], [100, 100], null);
+    s.addAnnotation(line);
+    s.selectAnnotation(line.id);
+    s.setTextSize(30);
+    const before = useEditor.getState().doc;
+
+    s.applyTextSizeToSelection();
+    expect(useEditor.getState().doc).toBe(before);
+  });
+
+  it("does nothing without a selected annotation", () => {
+    const s = useEditor.getState();
+    const before = useEditor.getState().doc;
+    s.applyTextSizeToSelection();
+    expect(useEditor.getState().doc).toBe(before);
+  });
+});

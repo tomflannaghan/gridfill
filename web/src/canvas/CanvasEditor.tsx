@@ -14,6 +14,7 @@ import {
   canvasToImage,
   computeViewport,
   computeViewportForRegion,
+  imageLengthToCanvas,
   imageToCanvas,
   type Viewport,
 } from "./viewport.ts";
@@ -24,7 +25,7 @@ import {
   moveAnnotationBy,
   moveAnnotationHandle,
 } from "../annotations/registry.ts";
-import { annotationFontSize } from "../annotations/sizes.ts";
+import { canvasFontSize } from "../annotations/text.ts";
 import { createCurve, createLine, createText, type Annotation } from "../annotations/types.ts";
 import { AnnotationEditor, type AnnotationEdit } from "../ui/AnnotationEditor.tsx";
 import { bgrToCss, hexToBgr, persistedColour, type Bgr } from "../model/colour.ts";
@@ -54,7 +55,7 @@ const CURSOR: Record<string, string> = {
 
 /** Where an open text editor writes to: a new annotation or an existing one. */
 type EditTarget =
-  | { kind: "new"; x: number; y: number; colour: Bgr | null }
+  | { kind: "new"; x: number; y: number; colour: Bgr | null; fontSize: number }
   | { kind: "existing"; id: string };
 
 /** An in-progress pointer drag (select/line tools). */
@@ -175,16 +176,21 @@ export function CanvasEditor() {
   }, []);
 
   const openTextEditor = useCallback(
-    (canvasX: number, canvasY: number, value: string, colour: Bgr | null, target: EditTarget) => {
-      const vp = vpRef.current;
-      if (!vp) return;
+    (
+      canvasX: number,
+      canvasY: number,
+      value: string,
+      colour: Bgr | null,
+      fontSize: number,
+      target: EditTarget,
+    ) => {
       editTargetRef.current = target;
       if (target.kind === "existing") hiddenIdRef.current = target.id;
       setEdit({
         x: canvasX,
         y: canvasY,
         value,
-        fontSize: annotationFontSize(vp),
+        fontSize,
         colour: colour ? bgrToCss(colour) : "#000000",
       });
     },
@@ -196,7 +202,8 @@ export function CanvasEditor() {
     const value = editRef.current?.value ?? "";
     const store = useEditor.getState();
     if (target?.kind === "new") {
-      if (value.trim() !== "") store.addAnnotation(createText(target.x, target.y, value, target.colour));
+      if (value.trim() !== "")
+        store.addAnnotation(createText(target.x, target.y, value, target.colour, target.fontSize));
     } else if (target?.kind === "existing") {
       const ann = store.doc?.annotations.find((a) => a.id === target.id);
       if (ann && ann.type === "text") {
@@ -291,7 +298,14 @@ export function CanvasEditor() {
         }
         case "text": {
           const colour = persistedColour(store.textColour);
-          openTextEditor(cx, cy, "", colour, { kind: "new", x: pt[0], y: pt[1], colour });
+          const fontSize = store.textSize;
+          openTextEditor(cx, cy, "", colour, imageLengthToCanvas(vp, fontSize), {
+            kind: "new",
+            x: pt[0],
+            y: pt[1],
+            colour,
+            fontSize,
+          });
           return;
         }
         case "line": {
@@ -415,7 +429,10 @@ export function CanvasEditor() {
         } else if (g.original.type === "text") {
           // A click without a drag on a text annotation: edit it.
           const [x, y] = imageToCanvas(vp, [g.original.x, g.original.y]);
-          openTextEditor(x, y, g.original.text, g.original.colour, { kind: "existing", id: g.id });
+          openTextEditor(x, y, g.original.text, g.original.colour, canvasFontSize(vp, g.original), {
+            kind: "existing",
+            id: g.id,
+          });
         }
         clearDraft();
         draw();
@@ -451,7 +468,10 @@ export function CanvasEditor() {
         if (ann && ann.type === "text") {
           store.selectAnnotation(annId);
           const [x, y] = imageToCanvas(vp, [ann.x, ann.y]);
-          openTextEditor(x, y, ann.text, ann.colour, { kind: "existing", id: annId });
+          openTextEditor(x, y, ann.text, ann.colour, canvasFontSize(vp, ann), {
+            kind: "existing",
+            id: annId,
+          });
         }
         return;
       }

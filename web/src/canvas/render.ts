@@ -14,7 +14,7 @@ import {
   annotationHandles,
   renderAnnotation,
 } from "../annotations/registry.ts";
-import { handleRadius } from "../annotations/sizes.ts";
+import { handleRadius, LETTER_FONT_RATIO } from "../annotations/sizes.ts";
 
 const BLOCK_FILL = "#0d0d0d";
 // Default colour for letters and annotations when they carry no explicit
@@ -110,7 +110,7 @@ function drawLetter(ctx: CanvasRenderingContext2D, vp: Viewport, cell: Cell): vo
   // available for a glyph in a non-rectangular cell. Older documents lacking
   // `size` fall back to the bounding box.
   const diameter = cell.size != null ? imageLengthToCanvas(vp, cell.size) : Math.min(w, h);
-  let fontSize = diameter * 0.62;
+  let fontSize = diameter * LETTER_FONT_RATIO;
   ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
   const measured = ctx.measureText(text).width;
   const maxWidth = w * 0.82;

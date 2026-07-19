@@ -41,9 +41,9 @@ deselecting zooms back out.
 
 ## Tools
 
-A **tool palette** on the left chooses what the pointer does. The **Select** tool
-(the default) is for filling in the grid — everything under *Selecting and editing
-cells* below applies to it. The **Text**, **Line** and **Curve** tools add
+A **tool palette** in the top toolbar chooses what the pointer does. The **Select**
+tool (the default) is for filling in the grid — everything under *Selecting and
+editing cells* below applies to it. The **Text**, **Line** and **Curve** tools add
 annotations, and the **Eraser** deletes them. See *Annotations* below.
 
 ## Selecting and editing cells
@@ -70,9 +70,9 @@ Several cells can be selected at once so a colour can be applied to all of them:
   corner inside the rectangle; releasing without dragging is an ordinary click.
 
 Selected cells are shown with a blue fill. A plain arrow key, a single click, or
-typing collapses back to a single selection. The **paintbrush** buttons in the
-top bar apply the current highlight or text colour to the whole selection (see
-*Highlighting* and *Text colour*).
+typing collapses back to a single selection. The highlight and text colour
+swatches in the top bar apply to the whole selection (see *Highlighting* and
+*Text colour*).
 
 ### Multi-letter cells
 
@@ -87,11 +87,10 @@ a time, and **Enter** or **Escape** exits the mode.
 default); pressing it again removes the highlight. **Ctrl+Shift+H** opens a
 colour picker to choose a different colour for subsequent highlights.
 
-Choosing a new colour in the **Highlight** picker immediately applies it as the
+Choosing a new colour in the **Highlight** swatch immediately applies it as the
 background of every selected cell (or the single selected cell), if anything is
-selected — a single undoable step. The **paintbrush** button beside it does the
-same with the current highlight colour, useful for applying it again to a new
-selection without reopening the picker.
+selected — a single undoable step. The **Clear highlight** button beside it
+removes the background from every selected cell instead.
 
 ## Text colour
 
@@ -102,12 +101,10 @@ entries can be given different colours; existing content keeps the colour it was
 created with. Each cell's and annotation's colour is saved in the `.cwd`
 document.
 
-Choosing a new colour in the **Text** picker immediately recolours the letters
+Choosing a new colour in the **Text** swatch immediately recolours the letters
 of every selected cell (or the single selected cell), or the selected
 annotation if one is selected instead of cells — a single undoable step. This
-is the way to change the colour of content already entered. The **paintbrush**
-button beside it does the same with the current text colour, useful for
-applying it again to a new selection without reopening the picker.
+is the way to change the colour of content already entered.
 
 ## Annotations
 
@@ -116,7 +113,9 @@ useful for clue numbers, notes, labels, or marking up the puzzle. Each tool
 creates one kind:
 
 - **Text** — click empty space to place free text and start typing; press
-  **Enter** or click away to finish.
+  **Enter** or click away to finish. While this tool is active, a size slider
+  in the toolbar sets the font size for the text annotation about to be
+  created (defaulting to the first grid's letter size).
 - **Line** — press and drag to draw a straight line; release to finish.
 - **Curve** — click to place a series of points; the curve is drawn smoothly
   through them. **Double-click** or press **Enter** to finish, **Escape** to
@@ -133,6 +132,8 @@ With the **Select** tool:
 - **Drag** its body to move it, or drag a **handle** to reshape it (an endpoint
   of a line, an anchor of a curve).
 - **Double-click** a text annotation to edit its text.
+- Selecting a text annotation also brings back the toolbar's size slider,
+  letting you resize that annotation directly.
 - With an annotation selected, **Delete** (or **Backspace**) removes it.
 
 The **Eraser** tool deletes any annotation you click on.

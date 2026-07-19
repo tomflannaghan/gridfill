@@ -9,7 +9,7 @@
  *     "image": { "encoding": "png", "data": "<base64 PNG>" },
  *     "grids": [ <grid>, ... ],
  *     "annotations": [
- *       { "type": "text",  "x": x, "y": y, "text": "..." },
+ *       { "type": "text",  "x": x, "y": y, "text": "...", "font_size": n },
  *       { "type": "line",  "points": [[x,y],[x,y]], "colour": [b,g,r] },
  *       { "type": "curve", "points": [[x,y], ...] }
  *     ]
@@ -17,8 +17,10 @@
  *
  * Coordinates (cell polygon vertices and annotation points) are source-image
  * pixel positions. Cell `background` / `text_colour` and an annotation's
- * optional `colour` are BGR triples (omitted for the default black). An
- * annotation's in-memory `id` is not persisted.
+ * optional `colour` are BGR triples (omitted for the default black). A text
+ * annotation's `font_size` is likewise source-image pixels, omitted for
+ * documents predating the field. An annotation's in-memory `id` is not
+ * persisted.
  */
 
 import { polygonCentroid, type Point } from "./geometry.ts";
@@ -141,7 +143,15 @@ function parseAnnotation(raw: unknown): Annotation {
   const id = newAnnotationId();
   switch (o.type) {
     case "text":
-      return { id, type: "text", colour, x: Number(o.x), y: Number(o.y), text: String(o.text) };
+      return {
+        id,
+        type: "text",
+        colour,
+        x: Number(o.x),
+        y: Number(o.y),
+        text: String(o.text),
+        fontSize: o.font_size == null ? null : Number(o.font_size),
+      };
     case "line": {
       const pts = (o.points as unknown[]).map(asPoint);
       if (pts.length < 2) throw new CwdParseError("Line annotation needs two points");
@@ -161,7 +171,14 @@ function annotationToJson(a: Annotation): unknown {
   const colour = a.colour == null ? {} : { colour: [...a.colour] };
   switch (a.type) {
     case "text":
-      return { type: "text", x: a.x, y: a.y, text: a.text, ...colour };
+      return {
+        type: "text",
+        x: a.x,
+        y: a.y,
+        text: a.text,
+        ...(a.fontSize == null ? {} : { font_size: a.fontSize }),
+        ...colour,
+      };
     case "line":
       return { type: "line", points: a.points.map(([x, y]) => [x, y]), ...colour };
     case "curve":
