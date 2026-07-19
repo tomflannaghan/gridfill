@@ -26,12 +26,21 @@ function decodeImage(dataUri: string): Promise<HTMLImageElement> {
   });
 }
 
+/** Decode a document's embedded image, ready to hand to the store. Shared by
+ * `openCwdFile` and by auto-save restoration on startup (lib/autosave.ts). */
+export async function decodeDocumentImage(
+  doc: Cwd,
+): Promise<{ image: HTMLImageElement; width: number; height: number }> {
+  const image = await decodeImage(imageDataUri(doc.image));
+  return { image, width: image.naturalWidth, height: image.naturalHeight };
+}
+
 /** Parse a `.cwd` File and decode its image, ready to hand to the store. */
 export async function openCwdFile(file: File): Promise<LoadedDocument> {
   const text = await file.text();
   const doc = parseCwd(text);
-  const image = await decodeImage(imageDataUri(doc.image));
-  return { doc, image, width: image.naturalWidth, height: image.naturalHeight, fileName: file.name };
+  const { image, width, height } = await decodeDocumentImage(doc);
+  return { doc, image, width, height, fileName: file.name };
 }
 
 function triggerDownload(blob: Blob, fileName: string): void {

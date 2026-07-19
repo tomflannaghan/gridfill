@@ -14,6 +14,10 @@ You can open the editor with:
 - **Nothing** — a blank canvas, from which you use **File → Open** to load any of
   the above.
 
+If the browser has an auto-saved document (see *Saving and exporting* below),
+reopening the editor resumes that document automatically instead of showing
+the blank canvas.
+
 Grids can be **rectangular** (a regular row/column layout) or **irregular**
 (arbitrarily-shaped cells — rhombi, hexagons, wedges). Both are filled in the
 same way; only how the arrow keys move between cells differs.
@@ -144,6 +148,12 @@ annotation edit — and **Redo (Ctrl+Shift+Z**, or **Ctrl+Y)** reapplies it.
   grid state and annotations, so work can be resumed later.
 - **Export (Ctrl+Shift+S)** writes the finished, filled-in grid as a PNG,
   without any of the editing chrome.
+- The current document is also **auto-saved** in the browser as you work — no
+  action needed. Reopening the editor (even after closing the tab or
+  reloading) resumes the document exactly as it was left, without needing an
+  explicit Save. This is separate from Save: it doesn't produce a `.cwd` file
+  you can share or back up, so an explicit Save is still how you keep a copy
+  outside the browser.
 
 There is **no automatic letter recognition** — every cell's content is entered
 by hand.

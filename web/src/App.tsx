@@ -1,15 +1,83 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useEditor } from "./state/store.ts";
-import { openCwdFile } from "./lib/files.ts";
+import { openCwdFile, decodeDocumentImage } from "./lib/files.ts";
+import { loadAutosave, saveAutosave, clearAutosave } from "./lib/autosave.ts";
 import { MenuBar } from "./ui/MenuBar.tsx";
 import { Toolbar } from "./ui/Toolbar.tsx";
 import { CanvasEditor } from "./canvas/CanvasEditor.tsx";
 import logoUrl from "./assets/logo.svg";
 
+/** Idle time after the last edit before it's written to auto-save storage. */
+const AUTOSAVE_DEBOUNCE_MS = 800;
+
 export function App() {
   const doc = useEditor((s) => s.doc);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  // Resume the last document on startup, if the browser auto-saved one and
+  // nothing else got loaded in the meantime (e.g. a drag-drop that beat this
+  // async restore).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const record = await loadAutosave();
+      if (cancelled || !record || useEditor.getState().doc !== null) return;
+      try {
+        const { image, width, height } = await decodeDocumentImage(record.doc);
+        if (cancelled || useEditor.getState().doc !== null) return;
+        useEditor
+          .getState()
+          .loadDocument(record.doc, { element: image, width, height }, record.fileName);
+      } catch {
+        // Corrupt auto-save; start blank rather than fail to load.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Keep auto-save in step with the document: debounced while editing (so
+  // fast typing doesn't write on every keystroke), flushed immediately when
+  // the tab is hidden (closed, backgrounded) since a pending debounce may
+  // never otherwise get to fire; cleared once the document is closed.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let flush: (() => void) | null = null;
+
+    const cancel = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      flush = null;
+    };
+
+    const onVisibilityChange = () => {
+      if (document.hidden) flush?.();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    const unsubscribe = useEditor.subscribe((state, prev) => {
+      if (state.doc === prev.doc && state.fileName === prev.fileName) return;
+      cancel();
+      if (state.doc === null) {
+        void clearAutosave();
+        return;
+      }
+      const { doc: nextDoc, fileName } = state;
+      flush = () => {
+        cancel();
+        void saveAutosave(nextDoc, fileName);
+      };
+      timer = setTimeout(flush, AUTOSAVE_DEBOUNCE_MS);
+    });
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      cancel();
+      unsubscribe();
+    };
+  }, []);
 
   const loadFile = useCallback(async (file: File) => {
     try {
