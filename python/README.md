@@ -27,4 +27,4 @@ from gridfill import detect_grids, save_document
 ```
 
 See [../DEVELOPMENT.md](../DEVELOPMENT.md) for installing from source, the API,
-building the standalone executable, and running tests.
+and running tests.

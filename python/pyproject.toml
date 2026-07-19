@@ -23,10 +23,6 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
-build = [
-    "pyinstaller>=6.0",
-    "pyinstaller-hooks-contrib>=2024.7",
-]
 
 [project.scripts]
 gridfill = "gridfill.cli:main"
