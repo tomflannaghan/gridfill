@@ -83,6 +83,19 @@ describe("annotation CRUD", () => {
     s.deleteAnnotation(line.id);
     expect(useEditor.getState().selectedAnnotationId).toBeNull();
   });
+
+  it("deselects cells when an annotation is selected for editing", () => {
+    loadGrid();
+    const s = useEditor.getState();
+    const line = createLine([0, 0], [1, 1], null);
+    s.addAnnotation(line);
+    s.selectCell(0, 0);
+    s.extendSelection("right"); // multi-cell selection
+    s.selectAnnotation(line.id);
+    expect(useEditor.getState().selection).toBeNull();
+    expect(useEditor.getState().selectedCells).toEqual([]);
+    expect(useEditor.getState().selectedAnnotationId).toBe(line.id);
+  });
 });
 
 describe("undo / redo", () => {
@@ -115,6 +128,20 @@ describe("undo / redo", () => {
     const texts = useEditor.getState().doc!.annotations;
     expect(texts).toHaveLength(1);
     expect((texts[0] as { text: string }).text).toBe("b");
+  });
+
+  it("preserves the cell selection across undo and redo", () => {
+    loadGrid();
+    const s = useEditor.getState();
+    s.selectCell(0, 4);
+    s.typeChar("x"); // commits a change (selection auto-advances)
+    s.selectCell(0, 4);
+    const sel = useEditor.getState().selection;
+
+    s.undo();
+    expect(useEditor.getState().selection).toEqual(sel);
+    s.redo();
+    expect(useEditor.getState().selection).toEqual(sel);
   });
 });
 
@@ -151,6 +178,20 @@ describe("multi-cell selection", () => {
     s.extendSelection("right"); // -> 1
     s.extendSelection("left"); // back to 0 (already in the set)
     expect(cellIndices()).toEqual([0, 1]);
+  });
+
+  it("deleteCell clears every selected cell", () => {
+    const s = useEditor.getState();
+    s.selectCell(0, 0);
+    s.typeChar("a"); // cell 0 = A, selection now on cell 1
+    s.selectCell(0, 1);
+    s.typeChar("b"); // cell 1 = B
+    s.selectCell(0, 0);
+    s.extendSelection("right"); // cells 0, 1 selected
+    s.deleteCell();
+    expect(cellOf(0).letter).toBeNull();
+    expect(cellOf(1).letter).toBeNull();
+    expect(cellOf(0).kind).toBe("empty");
   });
 
   it("a plain move collapses back to a single selection", () => {

@@ -332,11 +332,11 @@ export const useEditor = create<EditorState>((set, get) => {
     },
 
     deleteCell() {
-      const { doc, selection } = get();
-      if (!doc || !selection) return;
-      const cell = cellAt(doc, selection);
-      if (!cell || cell.kind === "block") return;
-      set(commit(withCell(doc, selection, cleared)));
+      const { doc } = get();
+      const targets = selectionTargets();
+      if (!doc || targets.length === 0) return;
+      // Clears every selected cell (single or multi); block cells are skipped.
+      set(commit(withCells(doc, targets, cleared)));
     },
 
     move(direction) {
@@ -392,7 +392,13 @@ export const useEditor = create<EditorState>((set, get) => {
     },
 
     selectAnnotation(id) {
-      set({ selectedAnnotationId: id });
+      // Selecting an annotation for editing deselects any cells (they can't be
+      // active at the same time); deselecting (id === null) leaves cells alone.
+      if (id === null) {
+        set({ selectedAnnotationId: null });
+        return;
+      }
+      set({ selectedAnnotationId: id, selection: null, selectedCells: [], mode: "normal" });
     },
 
     addAnnotation(a) {
@@ -421,14 +427,13 @@ export const useEditor = create<EditorState>((set, get) => {
       const { past, doc, future } = get();
       if (past.length === 0 || !doc) return;
       const prev = past[past.length - 1]!;
+      // Undo/redo only change document content, never grid structure, so the
+      // current selection stays valid and is preserved (undo shouldn't deselect).
       set({
         doc: prev,
         past: past.slice(0, -1),
         future: [doc, ...future],
         dirty: true,
-        selection: null,
-        selectedCells: [],
-        selectedAnnotationId: null,
       });
     },
 
@@ -441,9 +446,6 @@ export const useEditor = create<EditorState>((set, get) => {
         future: future.slice(1),
         past: [...past, doc],
         dirty: true,
-        selection: null,
-        selectedCells: [],
-        selectedAnnotationId: null,
       });
     },
   };
