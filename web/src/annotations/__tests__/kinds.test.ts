@@ -17,6 +17,7 @@ const line: LineAnnotation = {
     [0, 0],
     [100, 0],
   ],
+  lineWidth: null,
 };
 
 const curve: CurveAnnotation = {
@@ -28,12 +29,18 @@ const curve: CurveAnnotation = {
     [50, 50],
     [100, 0],
   ],
+  lineWidth: null,
 };
 
 describe("lineKind", () => {
   it("hit-tests near the segment but not far from it", () => {
     expect(lineKind.hitTest(CTX, VP, line, 50, 2)).toBe(true);
     expect(lineKind.hitTest(CTX, VP, line, 50, 40)).toBe(false);
+  });
+
+  it("widens the hit tolerance to the annotation's own stroke width", () => {
+    const thick: LineAnnotation = { ...line, lineWidth: 60 };
+    expect(lineKind.hitTest(CTX, VP, thick, 50, 40)).toBe(true);
   });
 
   it("moves both endpoints together", () => {

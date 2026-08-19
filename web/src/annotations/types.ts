@@ -36,12 +36,24 @@ export interface TextAnnotation extends BaseAnnotation {
 export interface LineAnnotation extends BaseAnnotation {
   type: "line";
   points: [Point, Point];
+  /** Stroke width, source-image pixels. Null for documents predating this
+   * field, which fall back to a viewport-relative default (annotations/sizes.ts). */
+  lineWidth: number | null;
 }
 
 /** A smooth curve passing through its anchor points (>= 2). */
 export interface CurveAnnotation extends BaseAnnotation {
   type: "curve";
   points: Point[];
+  /** Stroke width, source-image pixels. See `LineAnnotation.lineWidth`. */
+  lineWidth: number | null;
+}
+
+/** The stroked annotation kinds — those the line-width control applies to. */
+export type StrokedAnnotation = LineAnnotation | CurveAnnotation;
+
+export function isStroked(a: Annotation): a is StrokedAnnotation {
+  return a.type === "line" || a.type === "curve";
 }
 
 export type Annotation = TextAnnotation | LineAnnotation | CurveAnnotation;
@@ -62,10 +74,19 @@ export function createText(
   return { id: newAnnotationId(), type: "text", colour, x, y, text, fontSize };
 }
 
-export function createLine(p0: Point, p1: Point, colour: Bgr | null): LineAnnotation {
-  return { id: newAnnotationId(), type: "line", colour, points: [p0, p1] };
+export function createLine(
+  p0: Point,
+  p1: Point,
+  colour: Bgr | null,
+  lineWidth: number | null = null,
+): LineAnnotation {
+  return { id: newAnnotationId(), type: "line", colour, points: [p0, p1], lineWidth };
 }
 
-export function createCurve(points: Point[], colour: Bgr | null): CurveAnnotation {
-  return { id: newAnnotationId(), type: "curve", colour, points };
+export function createCurve(
+  points: Point[],
+  colour: Bgr | null,
+  lineWidth: number | null = null,
+): CurveAnnotation {
+  return { id: newAnnotationId(), type: "curve", colour, points, lineWidth };
 }

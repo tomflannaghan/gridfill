@@ -6,11 +6,16 @@
 
 import { create } from "zustand";
 import type { Cell, Cwd, Grid } from "../model/cwd.ts";
-import type { Annotation } from "../annotations/types.ts";
+import { isStroked, type Annotation } from "../annotations/types.ts";
 import { neighbor, nextFillable, prevFillable, type Direction } from "../model/grid.ts";
 import { cellsInRect } from "../canvas/hitTest.ts";
 import { DEFAULT_HIGHLIGHT_BGR, DEFAULT_TEXT_BGR, bgrEqual, persistedColour, type Bgr } from "../model/colour.ts";
-import { DEFAULT_TEXT_ANNOTATION_SIZE, defaultTextAnnotationSize } from "../annotations/sizes.ts";
+import {
+  DEFAULT_LINE_WIDTH,
+  DEFAULT_TEXT_ANNOTATION_SIZE,
+  defaultLineWidth,
+  defaultTextAnnotationSize,
+} from "../annotations/sizes.ts";
 
 export interface Selection {
   gridIndex: number;
@@ -52,6 +57,9 @@ export interface EditorState {
   /** Font size (source-image pixels) applied to newly created text annotations.
    * Seeded from the first grid's letter size on load. */
   textSize: number;
+  /** Stroke width (source-image pixels) applied to newly created line and curve
+   * annotations. Seeded from the image height on load. */
+  lineWidth: number;
   /** When true, the view zooms to fit the grid of the current selection. A view
    * preference (not part of the document, not undoable). */
   zoomToGrid: boolean;
@@ -97,9 +105,12 @@ export interface EditorState {
   applyTextColourToSelection(): void;
   /** Apply the current text size to the selected text annotation, if any. */
   applyTextSizeToSelection(): void;
+  /** Apply the current line width to the selected line/curve annotation, if any. */
+  applyLineWidthToSelection(): void;
   setHighlight(bgr: Bgr): void;
   setTextColour(bgr: Bgr): void;
   setTextSize(size: number): void;
+  setLineWidth(width: number): void;
   setZoomToGrid(on: boolean): void;
 
   selectAnnotation(id: string | null): void;
@@ -146,6 +157,12 @@ function cellAt(doc: Cwd, sel: Selection): Cell | null {
   return doc.grids[sel.gridIndex]?.cells[sel.cellIndex] ?? null;
 }
 
+/** The currently selected annotation, or null if none is selected. */
+export function selectedAnnotation(state: EditorState): Annotation | null {
+  if (state.selectedAnnotationId === null) return null;
+  return state.doc?.annotations.find((a) => a.id === state.selectedAnnotationId) ?? null;
+}
+
 const cleared = (cell: Cell): Cell => ({ ...cell, kind: "empty", letter: null });
 const normalizeChar = (ch: string): string => (/[a-z]/i.test(ch) ? ch.toUpperCase() : ch);
 
@@ -183,6 +200,7 @@ export const useEditor = create<EditorState>((set, get) => {
     highlight: DEFAULT_HIGHLIGHT_BGR,
     textColour: DEFAULT_TEXT_BGR,
     textSize: DEFAULT_TEXT_ANNOTATION_SIZE,
+    lineWidth: DEFAULT_LINE_WIDTH,
     zoomToGrid: true,
     dirty: false,
     past: [],
@@ -198,6 +216,7 @@ export const useEditor = create<EditorState>((set, get) => {
         selectedAnnotationId: null,
         mode: "normal",
         textSize: defaultTextAnnotationSize(doc),
+        lineWidth: defaultLineWidth(image.height),
         dirty: false,
         past: [],
         future: [],
@@ -448,6 +467,17 @@ export const useEditor = create<EditorState>((set, get) => {
       set(commit({ ...doc, annotations }));
     },
 
+    applyLineWidthToSelection() {
+      const { doc, lineWidth, selectedAnnotationId } = get();
+      if (!doc || selectedAnnotationId === null) return;
+      const target = doc.annotations.find((a) => a.id === selectedAnnotationId);
+      if (!target || !isStroked(target)) return;
+      const annotations = doc.annotations.map((a) =>
+        a.id === selectedAnnotationId ? { ...a, lineWidth } : a,
+      );
+      set(commit({ ...doc, annotations }));
+    },
+
     setHighlight(bgr) {
       set({ highlight: bgr });
     },
@@ -458,6 +488,10 @@ export const useEditor = create<EditorState>((set, get) => {
 
     setTextSize(size) {
       set({ textSize: size });
+    },
+
+    setLineWidth(width) {
+      set({ lineWidth: width });
     },
 
     setZoomToGrid(on) {

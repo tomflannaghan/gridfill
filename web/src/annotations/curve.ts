@@ -5,8 +5,8 @@ import { boundsOf, distanceToPolyline, type Point } from "../model/geometry.ts";
 import { imageToCanvas } from "../canvas/viewport.ts";
 import type { AnnotationKind, Handle } from "./kind.ts";
 import { annotationColour } from "./kind.ts";
-import { annotationStrokeWidth, handleRadius } from "./sizes.ts";
-import { strokePolyline } from "./stroke.ts";
+import { handleRadius } from "./sizes.ts";
+import { canvasStrokeWidth, strokePolyline } from "./stroke.ts";
 import { splinePolyline } from "./spline.ts";
 import type { CurveAnnotation } from "./types.ts";
 
@@ -17,11 +17,11 @@ function curvePolyline(vp: Parameters<typeof imageToCanvas>[0], a: CurveAnnotati
 
 export const curveKind: AnnotationKind<CurveAnnotation> = {
   render(ctx, vp, a) {
-    strokePolyline(ctx, curvePolyline(vp, a), annotationColour(a.colour), annotationStrokeWidth(vp));
+    strokePolyline(ctx, curvePolyline(vp, a), annotationColour(a.colour), canvasStrokeWidth(vp, a));
   },
 
   hitTest(_ctx, vp, a, cx, cy) {
-    const tol = Math.max(handleRadius(vp), annotationStrokeWidth(vp));
+    const tol = Math.max(handleRadius(vp), canvasStrokeWidth(vp, a));
     return distanceToPolyline(cx, cy, curvePolyline(vp, a)) <= tol;
   },
 

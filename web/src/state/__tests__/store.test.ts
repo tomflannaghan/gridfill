@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useEditor } from "../store.ts";
 import type { Cell, Cwd } from "../../model/cwd.ts";
-import { createLine, createText } from "../../annotations/types.ts";
+import { createCurve, createLine, createText } from "../../annotations/types.ts";
 
 function emptyDoc(): Cwd {
   return { format: "gridfill", version: 2, image: { encoding: "png", data: "" }, grids: [], annotations: [] };
@@ -344,5 +344,59 @@ describe("apply text size to selection", () => {
     const before = useEditor.getState().doc;
     s.applyTextSizeToSelection();
     expect(useEditor.getState().doc).toBe(before);
+  });
+});
+
+describe("apply line width to selection", () => {
+  beforeEach(loadGrid);
+
+  it("restrokes the selected line in one undo step", () => {
+    const s = useEditor.getState();
+    const line = createLine([0, 0], [100, 100], null);
+    s.addAnnotation(line);
+    s.selectAnnotation(line.id);
+    s.setLineWidth(9);
+    const undoDepth = useEditor.getState().past.length;
+
+    s.applyLineWidthToSelection();
+    const updated = useEditor.getState().doc!.annotations[0] as typeof line;
+    expect(updated.lineWidth).toBe(9);
+    expect(useEditor.getState().past.length).toBe(undoDepth + 1); // single step
+
+    useEditor.getState().undo();
+    expect((useEditor.getState().doc!.annotations[0] as typeof line).lineWidth).toBeNull();
+  });
+
+  it("also applies to a curve", () => {
+    const s = useEditor.getState();
+    const curve = createCurve(
+      [
+        [0, 0],
+        [50, 50],
+      ],
+      null,
+    );
+    s.addAnnotation(curve);
+    s.selectAnnotation(curve.id);
+    s.setLineWidth(7);
+    s.applyLineWidthToSelection();
+    expect((useEditor.getState().doc!.annotations[0] as typeof curve).lineWidth).toBe(7);
+  });
+
+  it("does nothing when the selected annotation is text", () => {
+    const s = useEditor.getState();
+    const text = createText(10, 20, "hi", null);
+    s.addAnnotation(text);
+    s.selectAnnotation(text.id);
+    s.setLineWidth(9);
+    const before = useEditor.getState().doc;
+
+    s.applyLineWidthToSelection();
+    expect(useEditor.getState().doc).toBe(before);
+  });
+
+  it("seeds the pen width from the loaded image's height", () => {
+    // 100px tall image -> the legacy viewport-relative width, floored at 1.
+    expect(useEditor.getState().lineWidth).toBe(1);
   });
 });

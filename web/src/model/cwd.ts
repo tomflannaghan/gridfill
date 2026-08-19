@@ -11,16 +11,16 @@
  *     "annotations": [
  *       { "type": "text",  "x": x, "y": y, "text": "...", "font_size": n },
  *       { "type": "line",  "points": [[x,y],[x,y]], "colour": [b,g,r] },
- *       { "type": "curve", "points": [[x,y], ...] }
+ *       { "type": "curve", "points": [[x,y], ...], "line_width": n }
  *     ]
  *   }
  *
  * Coordinates (cell polygon vertices and annotation points) are source-image
  * pixel positions. Cell `background` / `text_colour` and an annotation's
  * optional `colour` are BGR triples (omitted for the default black). A text
- * annotation's `font_size` is likewise source-image pixels, omitted for
- * documents predating the field. An annotation's in-memory `id` is not
- * persisted.
+ * annotation's `font_size`, and a line/curve annotation's `line_width`, are
+ * likewise source-image pixels, omitted for documents predating those fields.
+ * An annotation's in-memory `id` is not persisted.
  */
 
 import { polygonCentroid, type Point } from "./geometry.ts";
@@ -140,6 +140,7 @@ function parseAnnotation(raw: unknown): Annotation {
   if (typeof raw !== "object" || raw === null) throw new CwdParseError("Invalid annotation");
   const o = raw as Record<string, unknown>;
   const colour = o.colour == null ? null : asPoint3(o.colour);
+  const lineWidth = o.line_width == null ? null : Number(o.line_width);
   const id = newAnnotationId();
   switch (o.type) {
     case "text":
@@ -155,12 +156,12 @@ function parseAnnotation(raw: unknown): Annotation {
     case "line": {
       const pts = (o.points as unknown[]).map(asPoint);
       if (pts.length < 2) throw new CwdParseError("Line annotation needs two points");
-      return { id, type: "line", colour, points: [pts[0]!, pts[1]!] };
+      return { id, type: "line", colour, points: [pts[0]!, pts[1]!], lineWidth };
     }
     case "curve": {
       const pts = (o.points as unknown[]).map(asPoint);
       if (pts.length < 2) throw new CwdParseError("Curve annotation needs at least two points");
-      return { id, type: "curve", colour, points: pts };
+      return { id, type: "curve", colour, points: pts, lineWidth };
     }
     default:
       throw new CwdParseError(`Unknown annotation type: ${String(o.type)}`);
@@ -169,6 +170,7 @@ function parseAnnotation(raw: unknown): Annotation {
 
 function annotationToJson(a: Annotation): unknown {
   const colour = a.colour == null ? {} : { colour: [...a.colour] };
+  const lineWidth = a.type === "text" || a.lineWidth == null ? {} : { line_width: a.lineWidth };
   switch (a.type) {
     case "text":
       return {
@@ -180,9 +182,9 @@ function annotationToJson(a: Annotation): unknown {
         ...colour,
       };
     case "line":
-      return { type: "line", points: a.points.map(([x, y]) => [x, y]), ...colour };
+      return { type: "line", points: a.points.map(([x, y]) => [x, y]), ...lineWidth, ...colour };
     case "curve":
-      return { type: "curve", points: a.points.map(([x, y]) => [x, y]), ...colour };
+      return { type: "curve", points: a.points.map(([x, y]) => [x, y]), ...lineWidth, ...colour };
   }
 }
 

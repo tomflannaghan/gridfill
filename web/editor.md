@@ -121,6 +121,9 @@ creates one kind:
   through them. **Double-click** or press **Enter** to finish, **Escape** to
   cancel.
 
+While the **Line** or **Curve** tool is active the same toolbar slider sets the
+line width instead of the font size, applying to the stroke about to be drawn.
+
 All new annotations use the current **Text** colour.
 
 ### Editing annotations
@@ -132,8 +135,9 @@ With the **Select** tool:
 - **Drag** its body to move it, or drag a **handle** to reshape it (an endpoint
   of a line, an anchor of a curve).
 - **Double-click** a text annotation to edit its text.
-- Selecting a text annotation also brings back the toolbar's size slider,
-  letting you resize that annotation directly.
+- Selecting an annotation also brings back the toolbar's size slider, letting
+  you change that annotation directly — the font size of a text annotation, the
+  line width of a line or curve.
 - With an annotation selected, **Delete** (or **Backspace**) removes it.
 
 The **Eraser** tool deletes any annotation you click on.

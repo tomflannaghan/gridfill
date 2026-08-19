@@ -1,13 +1,16 @@
 /** The tool palette: selects the active pointer tool (see web/editor.md). The
  * `select` tool is the default (cell entry & selection); the rest create or
- * erase annotations. Rendered inline in the top toolbar. A text-size slider
- * also appears whenever it's relevant: while the `text` tool is active (sizing
- * the annotation about to be created) or a text annotation is selected (sizing
- * it directly, showing that annotation's own size). */
+ * erase annotations. Rendered inline in the top toolbar. A size slider also
+ * appears whenever it's relevant, sizing whichever dimension the context calls
+ * for: the font size of text annotations (the `text` tool, or a selected text
+ * annotation), or the stroke width of strokes (the `line`/`curve` tools, or a
+ * selected line/curve). It shows the selected annotation's own value when one
+ * is selected, otherwise the "pen" value new annotations will be created at. */
 
 import { useEffect, useRef, useState, type ComponentType, type SVGProps } from "react";
-import { useEditor, type Tool } from "../state/store.ts";
-import { defaultTextAnnotationSize } from "../annotations/sizes.ts";
+import { useEditor, selectedAnnotation, type EditorState, type Tool } from "../state/store.ts";
+import { defaultLineWidth, defaultTextAnnotationSize } from "../annotations/sizes.ts";
+import { isStroked } from "../annotations/types.ts";
 import { IconCursor, IconCursorText, IconSlashLg, IconBezier2, IconEraser } from "./icons.tsx";
 
 interface ToolDef {
@@ -25,53 +28,82 @@ const TOOLS: ToolDef[] = [
   { tool: "eraser", label: "Eraser", hint: "Eraser — click an annotation to delete it", Icon: IconEraser },
 ];
 
-/** Slider bounds (source-image pixels) for the text-annotation size control. */
-const TEXT_SIZE_MIN = 4;
-const TEXT_SIZE_MAX = 400;
+/** Which dimension the size slider currently edits. */
+type SizeControl = "text" | "line";
+
+/** Slider presentation and bounds (source-image pixels) per control. */
+const SIZE_CONTROLS: Record<SizeControl, { label: string; title: string; min: number; max: number }> = {
+  text: { label: "Text size", title: "Text annotation size", min: 4, max: 400 },
+  line: { label: "Line width", title: "Annotation line width", min: 1, max: 100 },
+};
+
+/** The control a tool implies while nothing is selected. */
+const TOOL_CONTROLS: Partial<Record<Tool, SizeControl>> = {
+  text: "text",
+  line: "line",
+  curve: "line",
+};
+
+/** The control to show: the selected annotation's own dimension takes priority
+ * over the active tool's; null hides the slider entirely. */
+function activeControl(s: EditorState): SizeControl | null {
+  const a = selectedAnnotation(s);
+  if (a) return a.type === "text" ? "text" : "line";
+  return TOOL_CONTROLS[s.tool] ?? null;
+}
+
+/** The value the slider should show: the selected annotation's own size
+ * (falling back to the default for one predating the field), or the "pen" size
+ * that'll be used for an annotation about to be created. */
+function activeValue(s: EditorState): number {
+  const a = selectedAnnotation(s);
+  if (a?.type === "text") {
+    return a.fontSize ?? (s.doc ? defaultTextAnnotationSize(s.doc) : s.textSize);
+  }
+  if (a && isStroked(a)) {
+    return a.lineWidth ?? (s.image ? defaultLineWidth(s.image.height) : s.lineWidth);
+  }
+  return activeControl(s) === "line" ? s.lineWidth : s.textSize;
+}
 
 export function Toolbar() {
   const tool = useEditor((s) => s.tool);
   const setTool = useEditor((s) => s.setTool);
   const hasDoc = useEditor((s) => s.doc !== null);
-  const hasSelectedTextAnnotation = useEditor((s) => {
-    if (s.selectedAnnotationId === null) return false;
-    const a = s.doc?.annotations.find((x) => x.id === s.selectedAnnotationId);
-    return a != null && a.type === "text";
-  });
-  const showTextSize = tool === "text" || hasSelectedTextAnnotation;
-
-  // The size the slider should show: the selected text annotation's own size
-  // (falling back to the document default for one predating the field), or
-  // the "pen" size that'll be used for an annotation about to be created.
-  const targetSize = useEditor((s) => {
-    if (s.selectedAnnotationId !== null) {
-      const a = s.doc?.annotations.find((x) => x.id === s.selectedAnnotationId);
-      if (a && a.type === "text") return a.fontSize ?? (s.doc ? defaultTextAnnotationSize(s.doc) : s.textSize);
-    }
-    return s.textSize;
-  });
+  const control = useEditor(activeControl);
+  const targetValue = useEditor(activeValue);
 
   // Local state drives the slider directly so dragging is visually smooth;
   // it's resynced whenever the underlying target (selection or pen) changes.
-  const [sliderValue, setSliderValue] = useState(targetSize);
-  useEffect(() => setSliderValue(targetSize), [targetSize]);
+  const [sliderValue, setSliderValue] = useState(targetValue);
+  useEffect(() => setSliderValue(targetValue), [targetValue]);
 
   // As with the colour inputs, commit to the store only on the native
   // "change" (drag release), not every "input" tick, so resizing is a single
-  // undo step. The slider is conditionally mounted, so the listener has to be
-  // re-attached whenever it (re)appears — hence the showTextSize dependency.
-  const textSizeRef = useRef<HTMLInputElement>(null);
+  // undo step. The slider is conditionally mounted (and switches meaning), so
+  // the listener has to be re-attached whenever it does — hence the dependency.
+  const sliderRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
-    const el = textSizeRef.current;
+    const el = sliderRef.current;
     if (!el) return;
     const onCommit = (e: Event) => {
       const s = useEditor.getState();
-      s.setTextSize(Number((e.target as HTMLInputElement).value));
-      s.applyTextSizeToSelection(); // no-op unless a text annotation is selected
+      const value = Number((e.target as HTMLInputElement).value);
+      // The apply-to-selection calls are no-ops unless a matching annotation
+      // is selected.
+      if (control === "line") {
+        s.setLineWidth(value);
+        s.applyLineWidthToSelection();
+      } else {
+        s.setTextSize(value);
+        s.applyTextSizeToSelection();
+      }
     };
     el.addEventListener("change", onCommit);
     return () => el.removeEventListener("change", onCommit);
-  }, [showTextSize]);
+  }, [control]);
+
+  const size = control ? SIZE_CONTROLS[control] : null;
 
   return (
     <div className="toolbar" role="toolbar" aria-label="Annotation tools">
@@ -89,20 +121,20 @@ export function Toolbar() {
           <Icon />
         </button>
       ))}
-      {showTextSize && (
-        <label className="text-size-control" title="Text annotation size">
+      {size && (
+        <label className="size-control" title={size.title}>
           <input
-            ref={textSizeRef}
+            ref={sliderRef}
             type="range"
-            min={TEXT_SIZE_MIN}
-            max={TEXT_SIZE_MAX}
+            min={size.min}
+            max={size.max}
             step={1}
             disabled={!hasDoc}
             value={sliderValue}
-            aria-label="Text size"
+            aria-label={size.label}
             onChange={(e) => setSliderValue(Number(e.target.value))}
           />
-          <span className="text-size-value">{Math.round(sliderValue)}</span>
+          <span className="size-value">{Math.round(sliderValue)}</span>
         </label>
       )}
     </div>

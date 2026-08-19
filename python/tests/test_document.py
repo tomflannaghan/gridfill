@@ -45,7 +45,7 @@ def test_document_round_trip(tmp_path: Path) -> None:
     annotations = [
         TextAnnotation(4.5, 5.0, "hello", None),
         TextAnnotation(10.5, 9.0, "world", (7, 8, 9)),
-        LineAnnotation([(3.0, 2.0), (12.0, 4.0)], (1, 2, 3)),
+        LineAnnotation([(3.0, 2.0), (12.0, 4.0)], (1, 2, 3), 2.5),
         CurveAnnotation([(3.0, 2.0), (6.0, 6.0), (12.0, 5.0)], None),
     ]
     path = tmp_path / "doc.cwd"
@@ -77,6 +77,22 @@ def test_default_colour_omitted_on_disk(tmp_path: Path) -> None:
     assert payload["annotations"] == [{"type": "text", "x": 3.0, "y": 4.0, "text": "hi"}]
 
     assert load_document(path).annotations == [TextAnnotation(3.0, 4.0, "hi", None)]
+
+
+def test_default_line_width_omitted_on_disk(tmp_path: Path) -> None:
+    """A stroke with no explicit width writes no ``line_width`` and loads back as None."""
+    path = tmp_path / "doc.cwd"
+    annotations = [
+        LineAnnotation([(1.0, 2.0), (3.0, 4.0)], None),
+        CurveAnnotation([(1.0, 2.0), (3.0, 4.0)], None, 6.0),
+    ]
+    save_document(path, _sample_image(), [_sample_grid()], annotations)
+
+    payload = json.loads(path.read_text())
+    assert "line_width" not in payload["annotations"][0]
+    assert payload["annotations"][1]["line_width"] == 6.0
+
+    assert load_document(path).annotations == annotations
 
 
 def test_load_document_rejects_unknown_annotation_type(tmp_path: Path) -> None:

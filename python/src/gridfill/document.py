@@ -29,8 +29,9 @@ Colour = tuple[int, int, int]
 # -> the editor's default black). Coordinates are source-image pixel positions,
 # like cell polygons. Persisted as JSON objects, e.g.
 # ``{"type": "text", "x": x, "y": y, "text": "...", "font_size": n}`` or
-# ``{"type": "line", "points": [[x, y], [x, y]], "colour": [b, g, r]}``; ``colour``
-# and ``font_size`` are omitted when ``None``. Mirrors web/src/annotations/types.ts.
+# ``{"type": "line", "points": [[x, y], [x, y]], "colour": [b, g, r], "line_width": n}``;
+# ``colour``, ``font_size`` and ``line_width`` are omitted when ``None``. Mirrors
+# web/src/annotations/types.ts.
 
 
 @dataclass
@@ -62,11 +63,15 @@ class LineAnnotation:
 
     points: list[Point]
     colour: Colour | None = None
+    # Stroke width in source-image pixels; None for documents predating this
+    # field, which the web editor falls back to a viewport-relative default for.
+    line_width: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "type": "line",
             "points": [list(p) for p in self.points],
+            **_line_width_dict(self.line_width),
             **_colour_dict(self.colour),
         }
 
@@ -77,11 +82,14 @@ class CurveAnnotation:
 
     points: list[Point]
     colour: Colour | None = None
+    # Stroke width in source-image pixels; see :class:`LineAnnotation`.
+    line_width: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "type": "curve",
             "points": [list(p) for p in self.points],
+            **_line_width_dict(self.line_width),
             **_colour_dict(self.colour),
         }
 
@@ -92,6 +100,11 @@ Annotation = TextAnnotation | LineAnnotation | CurveAnnotation
 def _colour_dict(colour: Colour | None) -> dict[str, Any]:
     """The ``colour`` key, present only when the colour is not the default."""
     return {} if colour is None else {"colour": list(colour)}
+
+
+def _line_width_dict(line_width: float | None) -> dict[str, Any]:
+    """The ``line_width`` key, present only when the annotation carries one."""
+    return {} if line_width is None else {"line_width": line_width}
 
 
 _FORMAT_MAGIC = "gridfill"
@@ -207,10 +220,12 @@ def _annotation_from_json(o: dict[str, Any]) -> Annotation:
             colour,
             None if font_size is None else float(font_size),
         )
+    raw_width = o.get("line_width")
+    line_width = None if raw_width is None else float(raw_width)
     if kind == "line":
-        return LineAnnotation(_parse_points(o["points"]), colour)
+        return LineAnnotation(_parse_points(o["points"]), colour, line_width)
     if kind == "curve":
-        return CurveAnnotation(_parse_points(o["points"]), colour)
+        return CurveAnnotation(_parse_points(o["points"]), colour, line_width)
     raise DocumentError(f"Unknown annotation type: {kind!r}")
 
 

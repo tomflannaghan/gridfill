@@ -3,7 +3,13 @@ import { render, fireEvent, cleanup } from "@testing-library/react";
 import { Toolbar } from "../Toolbar.tsx";
 import { useEditor } from "../../state/store.ts";
 import type { Cwd } from "../../model/cwd.ts";
-import { createLine, createText, type TextAnnotation } from "../../annotations/types.ts";
+import {
+  createCurve,
+  createLine,
+  type LineAnnotation,
+  type TextAnnotation,
+  createText,
+} from "../../annotations/types.ts";
 
 function emptyDoc(): Cwd {
   return { format: "gridfill", version: 2, image: { encoding: "png", data: "" }, grids: [], annotations: [] };
@@ -53,6 +59,13 @@ describe("Toolbar text-size slider", () => {
     expect(queryByLabelText("Text size")).toBeNull();
   });
 
+  it("gives way to the line-width slider for the line tool", () => {
+    useEditor.getState().setTool("line");
+    const { queryByLabelText } = render(<Toolbar />);
+    expect(queryByLabelText("Text size")).toBeNull();
+    expect(queryByLabelText("Line width")).not.toBeNull();
+  });
+
   it("shows the selected text annotation's own size, not the pen default", () => {
     const s = useEditor.getState();
     s.setTextSize(50);
@@ -78,5 +91,67 @@ describe("Toolbar text-size slider", () => {
     expect(updated.fontSize).toBe(30);
     expect(useEditor.getState().past.length).toBe(undoDepth + 1); // single step
     expect(useEditor.getState().textSize).toBe(30); // becomes the new pen default too
+  });
+});
+
+describe("Toolbar line-width slider", () => {
+  beforeEach(() => {
+    loadEmpty();
+    useEditor.getState().setTool("select");
+    cleanup();
+  });
+
+  it("is hidden for the select tool with nothing selected", () => {
+    const { queryByLabelText } = render(<Toolbar />);
+    expect(queryByLabelText("Line width")).toBeNull();
+  });
+
+  it("appears while the curve tool is active", () => {
+    useEditor.getState().setTool("curve");
+    const { queryByLabelText } = render(<Toolbar />);
+    expect(queryByLabelText("Line width")).not.toBeNull();
+  });
+
+  it("appears when a curve is selected, even with the select tool", () => {
+    const s = useEditor.getState();
+    const curve = createCurve(
+      [
+        [0, 0],
+        [10, 10],
+      ],
+      null,
+    );
+    s.addAnnotation(curve);
+    s.selectAnnotation(curve.id);
+
+    const { queryByLabelText } = render(<Toolbar />);
+    expect(queryByLabelText("Line width")).not.toBeNull();
+  });
+
+  it("shows the selected line's own width, not the pen default", () => {
+    const s = useEditor.getState();
+    s.setLineWidth(20);
+    const line = createLine([0, 0], [10, 10], null, 6);
+    s.addAnnotation(line);
+    s.selectAnnotation(line.id);
+
+    const { getByLabelText } = render(<Toolbar />);
+    expect((getByLabelText("Line width") as HTMLInputElement).value).toBe("6");
+  });
+
+  it("restrokes the selected line when the slider is released", () => {
+    const s = useEditor.getState();
+    const line = createLine([0, 0], [10, 10], null, 6);
+    s.addAnnotation(line);
+    s.selectAnnotation(line.id);
+    const undoDepth = useEditor.getState().past.length;
+
+    const { getByLabelText } = render(<Toolbar />);
+    fireEvent.change(getByLabelText("Line width"), { target: { value: "14" } });
+
+    const updated = useEditor.getState().doc!.annotations[0] as LineAnnotation;
+    expect(updated.lineWidth).toBe(14);
+    expect(useEditor.getState().past.length).toBe(undoDepth + 1); // single step
+    expect(useEditor.getState().lineWidth).toBe(14); // becomes the new pen default too
   });
 });

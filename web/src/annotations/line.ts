@@ -4,19 +4,19 @@ import { boundsOf, distanceToSegment, type Point } from "../model/geometry.ts";
 import { imageToCanvas } from "../canvas/viewport.ts";
 import type { AnnotationKind, Handle } from "./kind.ts";
 import { annotationColour } from "./kind.ts";
-import { annotationStrokeWidth, handleRadius } from "./sizes.ts";
-import { strokePolyline } from "./stroke.ts";
+import { handleRadius } from "./sizes.ts";
+import { canvasStrokeWidth, strokePolyline } from "./stroke.ts";
 import type { LineAnnotation } from "./types.ts";
 
 export const lineKind: AnnotationKind<LineAnnotation> = {
   render(ctx, vp, a) {
     const pts = a.points.map((p) => imageToCanvas(vp, p));
-    strokePolyline(ctx, pts, annotationColour(a.colour), annotationStrokeWidth(vp));
+    strokePolyline(ctx, pts, annotationColour(a.colour), canvasStrokeWidth(vp, a));
   },
 
   hitTest(_ctx, vp, a, cx, cy) {
     const [p0, p1] = a.points.map((p) => imageToCanvas(vp, p)) as [Point, Point];
-    const tol = Math.max(handleRadius(vp), annotationStrokeWidth(vp));
+    const tol = Math.max(handleRadius(vp), canvasStrokeWidth(vp, a));
     return distanceToSegment(cx, cy, p0, p1) <= tol;
   },
 

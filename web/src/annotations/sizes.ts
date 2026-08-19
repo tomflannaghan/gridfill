@@ -37,9 +37,26 @@ export function defaultTextAnnotationSize(doc: Cwd): number {
   return DEFAULT_TEXT_ANNOTATION_SIZE;
 }
 
-/** Stroke width (px) for line and curve annotations. */
+/** Stroke-width-to-image-height ratio: the width line and curve annotations
+ * were drawn at before the width was persisted, and the ratio a new one's
+ * default width is derived at, so new strokes match old ones. */
+const LINE_WIDTH_RATIO = 0.0025;
+
+/** Stroke width (px) for line/curve annotations that predate the persisted
+ * `lineWidth` field, scaled to the viewport so old documents still render
+ * sensibly. */
 export function annotationStrokeWidth(vp: Viewport): number {
-  return Math.max(1, imageHeightPx(vp) * 0.0025);
+  return Math.max(1, imageHeightPx(vp) * LINE_WIDTH_RATIO);
+}
+
+/** Fallback default (source-image pixels) for the line width used before a
+ * document (and so an image height) is known. */
+export const DEFAULT_LINE_WIDTH = 3;
+
+/** Default stroke width (source-image pixels) for a newly created line or
+ * curve annotation, given the source image's height in pixels. */
+export function defaultLineWidth(imageHeight: number): number {
+  return Math.max(1, imageHeight * LINE_WIDTH_RATIO);
 }
 
 /** Radius (px) of the draggable editing handles shown on a selected annotation.

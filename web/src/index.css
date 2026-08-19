@@ -297,14 +297,14 @@ body {
 }
 
 /* Text-annotation size slider, shown in the toolbar while the text tool is active. */
-.text-size-control {
+.size-control {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-left: 4px;
 }
 
-.text-size-value {
+.size-value {
   min-width: 2em;
   color: var(--muted);
   font-size: 12px;

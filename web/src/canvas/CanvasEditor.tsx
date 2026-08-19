@@ -60,7 +60,7 @@ type EditTarget =
 
 /** An in-progress pointer drag (select/line tools). */
 type Gesture =
-  | { kind: "line"; start: Point; colour: Bgr | null }
+  | { kind: "line"; start: Point; colour: Bgr | null; lineWidth: number }
   | { kind: "move"; id: string; original: Annotation; startPoint: Point; moved: boolean }
   | { kind: "handle"; id: string; handleId: string; original: Annotation; moved: boolean }
   | { kind: "marquee"; startPoint: Point; startCanvas: Point; cellHit: Selection | null; moved: boolean };
@@ -227,8 +227,9 @@ export function CanvasEditor() {
     curveRef.current = null;
     draftRef.current = null;
     if (points && points.length >= 2) {
-      const colour = persistedColour(useEditor.getState().textColour);
-      useEditor.getState().addAnnotation(createCurve(points, colour));
+      const store = useEditor.getState();
+      const colour = persistedColour(store.textColour);
+      store.addAnnotation(createCurve(points, colour, store.lineWidth));
     }
     draw();
   }, [draw]);
@@ -310,9 +311,10 @@ export function CanvasEditor() {
         }
         case "line": {
           const colour = persistedColour(store.textColour);
+          const lineWidth = store.lineWidth;
           canvasRef.current?.setPointerCapture(e.pointerId);
-          gestureRef.current = { kind: "line", start: pt, colour };
-          draftRef.current = { id: DRAFT_ID, type: "line", colour, points: [pt, pt] };
+          gestureRef.current = { kind: "line", start: pt, colour, lineWidth };
+          draftRef.current = { id: DRAFT_ID, type: "line", colour, points: [pt, pt], lineWidth };
           draw();
           return;
         }
@@ -320,7 +322,13 @@ export function CanvasEditor() {
           const colour = persistedColour(store.textColour);
           if (curveRef.current) curveRef.current.push(pt);
           else curveRef.current = [pt];
-          draftRef.current = { id: DRAFT_ID, type: "curve", colour, points: [...curveRef.current] };
+          draftRef.current = {
+            id: DRAFT_ID,
+            type: "curve",
+            colour,
+            points: [...curveRef.current],
+            lineWidth: store.lineWidth,
+          };
           draw();
           return;
         }
@@ -355,7 +363,13 @@ export function CanvasEditor() {
           return;
         }
         if (g.kind === "line") {
-          draftRef.current = { id: DRAFT_ID, type: "line", colour: g.colour, points: [g.start, pt] };
+          draftRef.current = {
+            id: DRAFT_ID,
+            type: "line",
+            colour: g.colour,
+            points: [g.start, pt],
+            lineWidth: g.lineWidth,
+          };
         } else if (g.kind === "move") {
           if (Math.hypot(cx - imageToCanvas(vp, g.startPoint)[0], cy - imageToCanvas(vp, g.startPoint)[1]) > DRAG_THRESHOLD) {
             g.moved = true;
@@ -380,6 +394,7 @@ export function CanvasEditor() {
           type: "curve",
           colour: persistedColour(store.textColour),
           points: [...curveRef.current, pt],
+          lineWidth: store.lineWidth,
         };
         draw();
       }
@@ -416,7 +431,7 @@ export function CanvasEditor() {
         const [c0x, c0y] = imageToCanvas(vp, p0);
         const [c1x, c1y] = imageToCanvas(vp, p1);
         if (Math.hypot(c1x - c0x, c1y - c0y) > DRAG_THRESHOLD) {
-          store.addAnnotation(createLine(p0, p1, g.colour));
+          store.addAnnotation(createLine(p0, p1, g.colour, g.lineWidth));
         }
         clearDraft();
         draw();

@@ -68,8 +68,14 @@ function sampleDoc(): Cwd {
     annotations: [
       { id: "a1", type: "text", colour: null, x: 30, y: 40, text: "note", fontSize: null },
       { id: "a2", type: "text", colour: [0, 0, 255], x: 60, y: 70, text: "red note", fontSize: 18 },
-      { id: "a3", type: "line", colour: null, points: [[10, 10], [40, 20]] },
-      { id: "a4", type: "curve", colour: [10, 20, 30], points: [[10, 10], [20, 30], [40, 25]] },
+      { id: "a3", type: "line", colour: null, points: [[10, 10], [40, 20]], lineWidth: null },
+      {
+        id: "a4",
+        type: "curve",
+        colour: [10, 20, 30],
+        points: [[10, 10], [20, 30], [40, 25]],
+        lineWidth: 4,
+      },
     ],
   };
 }
@@ -105,6 +111,25 @@ describe("parseCwd / serializeCwd", () => {
     const payload = JSON.parse(serializeCwd(doc));
     expect(payload.annotations[0].font_size).toBeUndefined();
     expect(payload.annotations[1].font_size).toBe(18);
+  });
+
+  it("persists a stroke's line width, omitting it when null", () => {
+    const doc = sampleDoc();
+    const payload = JSON.parse(serializeCwd(doc));
+    expect(payload.annotations[2].line_width).toBeUndefined();
+    expect(payload.annotations[3].line_width).toBe(4);
+  });
+
+  it("defaults a line width missing on disk to null", () => {
+    const text = JSON.stringify({
+      format: "gridfill",
+      version: 2,
+      image: { encoding: "png", data: PNG_1x1 },
+      grids: [],
+      annotations: [{ type: "line", points: [[1, 2], [3, 4]] }],
+    });
+    const line = parseCwd(text).annotations[0]!;
+    expect(line.type === "line" && line.lineWidth).toBeNull();
   });
 
   it("rejects an unknown annotation type", () => {
