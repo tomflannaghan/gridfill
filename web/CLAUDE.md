@@ -47,6 +47,18 @@ moveHandle). To add a kind: add its variant to `types.ts`, implement an
 else special-cases a kind**. Also add its JSON case to `cwd.ts` *and* Python
 `document.py` (both sides of the format).
 
+## Chrome controls commit on the native `change` event
+
+A toolbar/menu control that drags — a colour picker, a size slider — fires
+React's `onChange` on *every* tick, and each store mutation is its own undo
+entry, so a single drag would bury the undo stack. Instead these controls keep
+the live value in local React state (for smooth dragging) and commit to the
+store from a raw `el.addEventListener("change", …)` in an effect, which fires
+once on release. See the swatches in `MenuBar.tsx` and the size slider in
+`Toolbar.tsx`; reuse the pattern for any new dragging control. The listener is
+re-attached whenever the control is remounted or changes meaning (the slider
+switches between font size and line width), so watch that effect's deps.
+
 ## React StrictMode + inline editors
 
 `main.tsx` renders the app inside `<StrictMode>`, so on **every** mount React

@@ -15,6 +15,10 @@ This is a monorepo:
   in the browser. It needs no backend to open/save/export a `.cwd` file (it's
   plain JSON) — the backend above is only used to go from a raw scan to one.
   See [web/editor.md](web/editor.md) for the editor's intended behavior.
+- [deploy/](deploy/) — the Ansible deployment of the live site,
+  **https://gridfill.flannaghan.com**: `make backend` / `make nginx` /
+  `make frontend` (or `make all`) from `deploy/`. A web-only change needs just
+  `make frontend`. See [deploy/README.md](deploy/README.md).
 
 ## What this is
 
