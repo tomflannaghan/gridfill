@@ -67,7 +67,7 @@ session on the server.
 
 Installs the rate-limit zones and the site config. On this first run no
 certificate exists yet, so it serves HTTP only and prepares the ACME challenge
-path. It also installs `certbot`.
+path. It also installs a certbot renewal hook that reloads nginx.
 
 ### 3. Issue the TLS certificate (manual, one-time)
 
@@ -94,9 +94,12 @@ running certbot.
 
 ### TLS certificate
 
-certbot is installed by the nginx playbook and run in **webroot** mode, so it
-only issues/renews the certificate and never edits the Ansible-managed nginx
-config. Once DNS resolves and the HTTP site is up (steps 1–2), run once on the
+certbot is the server's snap install (`/usr/bin/certbot` links to
+`/snap/bin/certbot`). Don't install the apt `certbot` package: it takes over
+`/usr/bin/certbot`, and its timer can't renew the coultershaw-hydro
+certificates, which need the snap's nginx plugin. gridfill's certificate uses
+**webroot** mode, so certbot only issues/renews it and never edits the
+Ansible-managed nginx config. Once DNS resolves and the HTTP site is up (steps 1–2), run once on the
 server:
 
 ```bash
@@ -106,8 +109,10 @@ sudo certbot certonly --webroot \
   -d gridfill.flannaghan.com
 ```
 
-certbot installs a systemd timer that auto-renews. Verify with
-`sudo certbot renew --dry-run`. After the certificate exists, re-run the nginx
+The snap's `snap.certbot.renew.timer` auto-renews. The nginx playbook's
+deploy hook (`/etc/letsencrypt/renewal-hooks/deploy/reload-nginx`) reloads
+nginx after a renewal so the new certificate is served. Verify with
+`sudo certbot renew --dry-run --run-deploy-hooks`. After the certificate exists, re-run the nginx
 playbook (step 3) to enable HTTPS.
 
 ## How it fits together
@@ -139,6 +144,7 @@ playbook (step 3) to enable HTTPS.
 | [backend/playbook_backend.yaml](backend/playbook_backend.yaml) | Build wheel, install into venv, run systemd service |
 | [backend/gridfill.service](backend/gridfill.service) | systemd unit for `gridfill-server` |
 | [frontend/playbook_frontend.yaml](frontend/playbook_frontend.yaml) | Build the SPA and upload static files |
-| [nginx/playbook_nginx.yaml](nginx/playbook_nginx.yaml) | Site config, rate-limit zones, certbot install |
+| [nginx/playbook_nginx.yaml](nginx/playbook_nginx.yaml) | Site config, rate-limit zones, certbot renewal hook |
+| [nginx/reload-nginx](nginx/reload-nginx) | certbot deploy hook that reloads nginx |
 | [nginx/templates/gridfill.flannaghan.com.conf.j2](nginx/templates/gridfill.flannaghan.com.conf.j2) | nginx site (HTTP-only until cert exists, then HTTPS) |
 | [nginx/gridfill_ratelimit.conf](nginx/gridfill_ratelimit.conf) | `limit_req` / `limit_conn` zones |

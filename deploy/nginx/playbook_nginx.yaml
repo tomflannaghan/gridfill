@@ -1,7 +1,8 @@
 ---
 # Configure nginx for gridfill.flannaghan.com: serve the SPA and reverse-proxy
-# /api/ to the backend, with rate limiting. Also installs certbot (the cert is
-# issued manually once — see deploy/README.md).
+# /api/ to the backend, with rate limiting. Uses the server's existing snap
+# certbot (the cert is issued manually once — see deploy/README.md) and
+# installs a renewal hook that reloads nginx.
 #
 # The site template auto-detects whether a TLS certificate exists yet:
 #   - first run (no cert)  -> HTTP-only, ready for the certbot challenge
@@ -26,11 +27,18 @@
         state: reloaded
 
   tasks:
-    - name: Install certbot (webroot mode; does not touch nginx config)
-      ansible.builtin.apt:
-        name: certbot
-        state: present
-        update_cache: true
+    # certbot comes from snap on this server (set up for coultershaw-hydro, whose
+    # certificates need the snap's nginx plugin). Don't install the apt package:
+    # it would take over /usr/bin/certbot and its timer fails on those certificates.
+    - name: Check certbot is available
+      ansible.builtin.command: certbot --version
+      changed_when: false
+
+    - name: Reload nginx after certificate renewals (webroot certs aren't installed by certbot)
+      ansible.builtin.copy:
+        src: reload-nginx
+        dest: /etc/letsencrypt/renewal-hooks/deploy/reload-nginx
+        mode: "0755"
 
     - name: Ensure the web root exists (for the ACME challenge)
       ansible.builtin.file:

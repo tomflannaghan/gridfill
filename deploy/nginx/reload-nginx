@@ -1,0 +1,5 @@
+#!/bin/sh
+# certbot deploy hook: reload nginx after any certificate renews, so webroot
+# certificates (which certbot doesn't install into nginx itself) are picked up.
+# Managed by gridfill deploy/nginx/playbook_nginx.yaml.
+systemctl reload nginx
