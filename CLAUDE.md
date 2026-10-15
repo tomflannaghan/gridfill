@@ -97,3 +97,10 @@ on any change where an old document would parse but mean something different
 (e.g. version 2 switched coordinates from normalized `[0, 1]` to pixels) — not
 for an additive, always-optional field like `Cell.text_colour`, which old
 documents simply lack and both loaders already default.
+
+## Healthcheck
+
+[.claude/skills/this-healthcheck](.claude/skills/this-healthcheck/SKILL.md) is
+run by the global `/healthcheck`. It checks the live editor loads and that
+detection works end to end, and reports problems without fixing them. Update it
+when the deployment or the `.cwd` format version changes.
