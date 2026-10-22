@@ -38,8 +38,10 @@ runs **both** detectors and merges:
   black blocks existing.
 - **Irregular** ([irregular.py](src/gridfill/detection/irregular.py)) — the
   general one. Makes *no* shape assumption: labels the enclosed white regions,
-  keeps the dominant same-size cluster, groups mutually-adjacent cells into
-  lattices, and traces each cell polygon. Handles rhombi, hexagons, wedges.
+  keeps the dominant same-size cluster (then grows it to adjacent regions of
+  similar size to their neighbour, so cells that shrink across a grid — a
+  circular grid's inner rings — aren't dropped), groups mutually-adjacent cells
+  into lattices, and traces each cell polygon. Handles rhombi, hexagons, wedges.
 
 Rectangular runs first and wins ties: a plain square grid reads as *both*, so
 combined.py **drops any irregular grid that overlaps a rectangular one**

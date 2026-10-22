@@ -127,9 +127,15 @@ def _touches_border(stats_row: np.ndarray, shape: tuple[int, int]) -> bool:
     return x == 0 or y == 0 or x + w == width or y + h == height
 
 
-def _select_cells(labels: np.ndarray, stats: np.ndarray) -> list[int]:
-    """Pick the region labels that look like cells: not the border-touching
-    background, above the noise floor, and within the dominant size cluster."""
+def _select_cells(labels: np.ndarray, stats: np.ndarray) -> tuple[list[int], list[int]]:
+    """Pick the region labels that look like cells.
+
+    Returns ``(candidates, cells)``: *candidates* are every region that isn't the
+    border-touching background and clears the noise floor; *cells* are those
+    within the dominant size cluster. The reference size is page-wide, so a
+    lattice whose cells taper (a circular grid's inner rings) can lose its
+    smallest cells here -- :func:`_grow_cells` recovers them from *candidates*.
+    """
     height, width = labels.shape
     max_area = _MAX_CELL_AREA_FRAC * height * width
 
@@ -145,7 +151,7 @@ def _select_cells(labels: np.ndarray, stats: np.ndarray) -> list[int]:
         areas.append(area)
 
     if not candidates:
-        return []
+        return [], []
 
     # Reference cell area is the median of the *upper half* of candidate areas,
     # so a crowd of small leftovers (glyph counters that cleared the floor)
@@ -155,7 +161,8 @@ def _select_cells(labels: np.ndarray, stats: np.ndarray) -> list[int]:
     reference = float(np.median(upper))
 
     lo, hi = _SIZE_BAND_LO * reference, _SIZE_BAND_HI * reference
-    return [label for label, area in zip(candidates, areas, strict=True) if lo <= area <= hi]
+    cells = [label for label, area in zip(candidates, areas, strict=True) if lo <= area <= hi]
+    return candidates, cells
 
 
 def _build_adjacency(
@@ -183,6 +190,31 @@ def _build_adjacency(
                 adjacency[label].add(other_label)
                 adjacency[other_label].add(label)
     return adjacency
+
+
+def _grow_cells(stats: np.ndarray, cells: list[int], adjacency: dict[int, set[int]]) -> list[int]:
+    """Extend *cells* with adjacent regions of similar size to their neighbour.
+
+    The page-wide size band suits lattices of uniform cells, but cells that
+    shrink gradually across a lattice (a circular grid's rings narrow towards
+    the centre) can drift out of it. A region is accepted when it borders an
+    accepted cell and is within the size band of *that* cell, so the test is
+    local; glyph counters, far smaller than the cell enclosing them, still fail
+    it. Acceptance spreads transitively, so a whole tapering lattice is taken.
+    """
+    accepted = set(cells)
+    queue = list(cells)
+    while queue:
+        label = queue.pop()
+        area = float(stats[label, cv2.CC_STAT_AREA])
+        for other in adjacency[label]:
+            if other in accepted:
+                continue
+            other_area = float(stats[other, cv2.CC_STAT_AREA])
+            if _SIZE_BAND_LO * area <= other_area <= _SIZE_BAND_HI * area:
+                accepted.add(other)
+                queue.append(other)
+    return [label for label in adjacency if label in accepted]
 
 
 def _connected_groups(cells: list[int], adjacency: dict[int, set[int]]) -> list[list[int]]:
@@ -241,12 +273,15 @@ def detect_irregular_grids(binary: np.ndarray) -> list[IrregularGrid]:
     when no lattice of adjacent same-size cells is found.
     """
     labels, stats, centroids = _label_regions(binary)
-    cells = _select_cells(labels, stats)
+    candidates, cells = _select_cells(labels, stats)
     if not cells:
         raise GridDetectionError("No cell-like regions found in image")
 
     bridge = _adjacency_bridge(_estimate_line_thickness(binary))
-    adjacency = _build_adjacency(labels, stats, cells, bridge)
+    candidate_adjacency = _build_adjacency(labels, stats, candidates, bridge)
+    cells = _grow_cells(stats, cells, candidate_adjacency)
+    cell_set = set(cells)
+    adjacency = {label: candidate_adjacency[label] & cell_set for label in cells}
     groups = [g for g in _connected_groups(cells, adjacency) if len(g) >= _MIN_CELLS]
     if not groups:
         raise GridDetectionError("No irregular grid (adjacent same-size cells) found in image")

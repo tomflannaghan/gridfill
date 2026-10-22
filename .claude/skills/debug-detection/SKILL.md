@@ -14,7 +14,7 @@ rows/cols; dump the stages.
 ```
 load_image → to_grayscale → binarize(ink=255) → detect_grids → grids
                                                   ├── rectangular: extract_line_mask → find quads → rectify → infer_cell_boxes
-                                                  └── irregular:   label enclosed regions → size-filter → adjacency groups → polygons
+                                                  └── irregular:   label enclosed regions → size-filter → grow → adjacency groups → polygons
 ```
 
 Common failure → likely stage:
@@ -27,6 +27,11 @@ Common failure → likely stage:
   irregular grid not being dropped as overlapping a rectangular one.
 - **Missing auxiliary single-row/col grid** — the fine (pitch-sized) line pass,
   or the `_PITCH_TOLERANCE` reject.
+- **Irregular grid missing some cells** — the size band. Its reference area is
+  page-wide (on a mixed page, set by the rectangular grids), then
+  `_grow_cells` extends it to neighbours of similar size. To see which cells
+  are dropped, print each labelled region's area from `irregular._label_regions`
+  next to the `lo`/`hi` band limits.
 
 ## How to run
 
@@ -60,12 +65,11 @@ cv2.imwrite(str(out / "2_linemask.png"), extract_line_mask(binary))  # only grid
 
 # Draw detected grid polygons back onto the source image.
 vis = image.copy()
-h, w = image.shape[:2]
 try:
     grids = detect_grids(binary)
     for i, g in enumerate(grids):
         for cell in g.cells:
-            pts = np.array([[int(x * w), int(y * h)] for x, y in cell.polygon], np.int32)
+            pts = np.array(cell.polygon, np.int32)  # source-image pixels
             cv2.polylines(vis, [pts], True, (0, 0, 255), 2)
     print(f"detect_grids -> {len(grids)} grid(s): "
           f"{[(getattr(g,'rows',None), getattr(g,'cols',None), len(g.cells)) for g in grids]}")
@@ -100,11 +104,25 @@ Then **Read the output PNGs** (`1_binary.png`, `2_linemask.png`,
   second pass in `detect_rectangular_grids`).
 - `segmentation.infer_cell_boxes` — `min_value` (0.4×), `min_gap` (4.0).
 - `rectangle` filters — `_MIN_ABS_AREA`, `_PITCH_TOLERANCE`.
-- `irregular` — `_MIN_CELL_AREA`, `_SIZE_BAND_LO/HI`, `_ADJ_DILATE`, `_MIN_CELLS`.
+- `irregular` — `_MIN_CELL_AREA`, `_SIZE_BAND_LO/HI` (page-wide in
+  `_select_cells`, per-neighbour in `_grow_cells`), `_ADJ_DILATE_MARGIN`,
+  `_MIN_CELLS`.
 - `combined._OVERLAP_FRACTION` — rectangular-vs-irregular dedup.
 
 After changing a constant, re-run and re-check the PNGs, and run `pytest
 tests/test_fixtures.py` so a tuning fix doesn't regress the real scans.
+
+## Ground truth for circular grids
+
+Rings and sectors are hard to count by eye. Unroll the circle around its
+centre — each ring becomes a column and each sector a row of a rectangular grid:
+
+```python
+polar = cv2.warpPolar(image, (700, 1440), (cx, cy), radius, cv2.WARP_POLAR_LINEAR)
+```
+
+Read the PNG to count by eye, or find the ring walls as peaks in
+`(gray(polar) < 128).mean(axis=0)`.
 
 ## Reproduce as a test
 

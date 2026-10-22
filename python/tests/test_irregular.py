@@ -72,6 +72,23 @@ def test_multigrid_includes_honeycomb() -> None:
     assert 125 <= len(hex_grids[0].cells) <= 165
 
 
+def test_circular_grid_keeps_tapering_inner_ring() -> None:
+    """A Magpie entry-form page: five rectangular grids plus a circular grid of
+    9 rings x 18 sectors = 162 cells, whose cells shrink towards the centre.
+
+    Regression test for the innermost ring being dropped: its cells fell below
+    the size band, whose reference area is page-wide (here dominated by the
+    rectangular grids' cells), even though each is close in size to the
+    neighbouring cell in the next ring out.
+    """
+    grids = detect_grids(_binary("irregular_circular.png"))
+    rectangular = [(g.rows, g.cols) for g in grids if isinstance(g, RectangularGrid)]
+    assert rectangular == [(12, 12), (13, 13), (12, 12), (12, 12), (6, 8)]
+    irregular = [g for g in grids if isinstance(g, IrregularGrid)]
+    assert len(irregular) == 1
+    assert len(irregular[0].cells) == 162
+
+
 def _bbox(grid: Grid) -> tuple[float, float, float, float]:
     points = grid.bounding_polygon()
     xs = [x for x, _ in points]
@@ -120,6 +137,7 @@ def test_every_cell_has_a_polygon() -> None:
         "irregular_squares.png",
         "irregular_wavy_triangle.png",
         "irregular_multigrid.png",
+        "irregular_circular.png",
     ):
         for grid in _detect(name):
             for cell in grid.cells:
