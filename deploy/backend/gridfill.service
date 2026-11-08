@@ -1,26 +1,45 @@
 [Unit]
-Description=gridfill detection backend (FastAPI/uvicorn)
+Description=gridfill backend and web editor (FastAPI/uvicorn)
 After=network.target
 
 [Service]
 User=gridfill
 Group=gridfill
 Type=simple
-# Bind to loopback only; nginx is the public entry point and proxies to it.
-ExecStart=/home/gridfill/venv/bin/gridfill-server --host 127.0.0.1 --port 8420
+# Bind to loopback only, on the port registered for gridfill in the metatron
+# repo's nginx_sites; metatron's nginx is the public entry point.
+ExecStart=/opt/gridfill/venv/bin/gridfill-server --host 127.0.0.1 --port 3001 --static-dir /var/www/gridfill.flannaghan.com/html
 Restart=always
 RestartSec=5
 
-# Hardening. The service only reads its venv (under /home) and writes temp
-# files (PrivateTmp gives it a private /tmp), so it needs no writable paths.
+# Sandbox, following metatron's docs/deploying-apps.md. The service only reads
+# its venv and the web root and writes temp files (PrivateTmp gives it a private
+# /tmp), so it needs no ReadWritePaths.
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
 ProtectSystem=strict
-ProtectHome=read-only
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
 
-# Cap memory so a large upload/detection can't take down the shared 1 GB box.
-# Tune upwards if detection of big scans gets OOM-killed (see journalctl).
-MemoryMax=100M
+# Cap memory so a large upload/detection can't affect the other services on the
+# box. Tune upwards if detection of big scans gets OOM-killed (see journalctl).
+MemoryMax=500M
 
 [Install]
 WantedBy=multi-user.target

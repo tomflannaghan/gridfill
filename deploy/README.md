@@ -1,19 +1,17 @@
 # Deploying gridfill
 
-gridfill is hosted at **https://gridfill.flannaghan.com**, alongside the
-coultershaw-hydro project on the same Lightsail server. Two pieces get
-deployed:
+gridfill is hosted at **https://gridfill.flannaghan.com** on `metatron`, a
+server shared with other services. Two pieces get deployed from this repo:
 
-- **backend** — the `gridfill-server` FastAPI service (grid detection),
-  running under systemd as the `gridfill` user, bound to `127.0.0.1:8420`.
-- **frontend** — the React web editor, built to static files and served by
-  nginx.
+- **backend** — the `gridfill-server` FastAPI service (grid detection), running
+  under systemd as the `gridfill` user, bound to `127.0.0.1:3001`.
+- **frontend** — the React web editor, built to static files that
+  `gridfill-server` serves at `/`.
 
-nginx serves the SPA and reverse-proxies `/api/` to the backend, with rate
-limiting to protect the shared box.
-
-Everything is done with Ansible except issuing the TLS certificate (a one-time
-`certbot` run) and the DNS record — see [Manual steps](#manual-steps).
+The public side belongs to the separate `metatron` repo, which owns nginx, TLS
+(a wildcard certificate) and DNS. Its `nginx_sites` entry for gridfill proxies
+the whole site to port 3001 and caps uploads at 25 MB. This repo doesn't touch
+any of that; see `docs/deploying-apps.md` there.
 
 > **Nothing secret is needed or checked in.** All Python dependencies come from
 > public PyPI (no private index, so no `pip.conf`), and the backend needs no
@@ -27,111 +25,60 @@ The machine you deploy *from* needs:
   collections).
 - `uv` — used to build the backend wheel (`cd python && uv build`).
 - `node` + `npm` — used to build the frontend.
-- SSH access to the server as host `coultershaw_server`. As in the
-  coultershaw-hydro project, `~/.ssh/config` should contain:
-
-  ```
-  Host coultershaw_server
-  HostName <static ip assigned in AWS>
-  User ubuntu
-  ```
-
-The server is assumed to already have nginx installed (it hosts
-coultershaw-hydro too).
+- SSH access to the server as host `metatron`, with passwordless sudo.
 
 ## Deploy
 
-A [Makefile](Makefile) wraps the three playbooks below — each target just
-`cd`s into the matching subfolder and runs `ansible-playbook`. Run these from
-`deploy/`, in order the first time (subsequent redeploys are safe to re-run in
-any order/combination):
+A [Makefile](Makefile) wraps the two playbooks below — each target just `cd`s
+into the matching subfolder and runs `ansible-playbook`. Run these from
+`deploy/`, in any order or combination:
 
 ```bash
 make backend    # just the backend
-make nginx      # just nginx
 make frontend   # just the frontend
-make backend frontend   # both, one after the other
-make all        # backend, nginx, frontend, in that order
+make all        # backend, then frontend
 ```
 
-### 1. Backend (`make backend`)
+Until both have been deployed, the site returns 502 (no backend) or 404 (no
+frontend).
+
+### Backend (`make backend`)
 
 Builds a wheel locally, uploads it, installs it into a venv owned by the
 `gridfill` user, and starts the systemd service.
 
-Check it: `ssh coultershaw_server systemctl status gridfill`, or
-`curl -F file=@some-scan.png http://127.0.0.1:8420/api/detect` from an SSH
-session on the server.
+Check it: `ssh metatron systemctl status gridfill`, or
+`curl -F file=@some-scan.png http://127.0.0.1:3001/api/detect` from an SSH
+session on the server. `systemd-analyze security gridfill` should score about
+1.5 ("OK").
 
-### 2. nginx (`make nginx`) — HTTP only, first pass
-
-Installs the rate-limit zones and the site config. On this first run no
-certificate exists yet, so it serves HTTP only and prepares the ACME challenge
-path. It also installs a certbot renewal hook that reloads nginx.
-
-### 3. Issue the TLS certificate (manual, one-time)
-
-See [Manual steps](#manual-steps) below — point DNS at the server and run
-`certbot`. Then **re-run `make nginx`** so it detects the certificate and
-switches to HTTPS (with an HTTP→HTTPS redirect).
-
-### 4. Frontend (`make frontend`)
+### Frontend (`make frontend`)
 
 Builds the web editor (with the API URL baked in) and uploads the static files.
+No restart is needed.
 
 Visit https://gridfill.flannaghan.com — open a `.cwd`, or upload a scan/PDF to
 have the backend detect a grid.
 
-## Manual steps
-
-Only two things are not automated:
-
-### DNS
-
-Point `gridfill.flannaghan.com` (an A record) at the server's static IP,
-wherever `flannaghan.com`'s DNS is managed. Wait for it to propagate before
-running certbot.
-
-### TLS certificate
-
-certbot is the server's snap install (`/usr/bin/certbot` links to
-`/snap/bin/certbot`). Don't install the apt `certbot` package: it takes over
-`/usr/bin/certbot`, and its timer can't renew the coultershaw-hydro
-certificates, which need the snap's nginx plugin. gridfill's certificate uses
-**webroot** mode, so certbot only issues/renews it and never edits the
-Ansible-managed nginx config. Once DNS resolves and the HTTP site is up (steps 1–2), run once on the
-server:
-
-```bash
-ssh coultershaw_server
-sudo certbot certonly --webroot \
-  -w /var/www/gridfill.flannaghan.com/html \
-  -d gridfill.flannaghan.com
-```
-
-The snap's `snap.certbot.renew.timer` auto-renews. The nginx playbook's
-deploy hook (`/etc/letsencrypt/renewal-hooks/deploy/reload-nginx`) reloads
-nginx after a renewal so the new certificate is served. Verify with
-`sudo certbot renew --dry-run --run-deploy-hooks`. After the certificate exists, re-run the nginx
-playbook (step 3) to enable HTTPS.
-
 ## How it fits together
 
 ```
-                 gridfill.flannaghan.com  (nginx, TLS)
-                 ├── /                     -> static SPA (/var/www/.../html)
-                 └── /api/  (rate limited) -> 127.0.0.1:8420  (gridfill.service)
+gridfill.flannaghan.com  (metatron's nginx, TLS, 25 MB upload cap)
+└── /  -> 127.0.0.1:3001  (gridfill.service)
+          ├── POST /api/detect  (rate limited)
+          └── everything else   -> static SPA (/var/www/.../html)
 ```
 
-- **Rate limiting** ([nginx/gridfill_ratelimit.conf](nginx/gridfill_ratelimit.conf)):
-  the `/api/` location is capped at 20 requests/minute per IP (burst 10) and 4
-  concurrent connections per IP, returning `429` when exceeded. Uploads are
-  capped at 25 MB (`client_max_body_size`). Detection is CPU/memory heavy, so
-  these are deliberately conservative — adjust the `rate`/`burst` there if
-  needed.
-- **Backend hardening** ([backend/gridfill.service](backend/gridfill.service)):
-  runs as an unprivileged user with `ProtectSystem=strict`, `PrivateTmp`, and a
-  `MemoryMax` cap so a large detection can't take down the shared 1 GB box.
+- **Rate limiting** ([server.py](../python/src/gridfill/server.py)): the backend
+  allows 20 detections/minute per client IP (burst 10), returning `429` with a
+  `Retry-After` when exceeded, and runs one detection at a time, queueing the
+  rest (`--max-concurrency`). Detection is CPU/memory heavy, so these are
+  deliberately conservative — adjust `_rate_limiter` there if needed. The client
+  IP comes from nginx's `X-Forwarded-For`. The state is per-process, so run a
+  single worker.
+- **Sandbox** ([backend/gridfill.service](backend/gridfill.service)): metatron's
+  standard systemd hardening, plus a `MemoryMax` cap so a large detection can't
+  affect the rest of the box.
 - **Redeploys**: re-running a playbook picks up new code. The backend force-
   reinstalls the app even at the same version number; the frontend clears old
   hashed assets before uploading.
@@ -140,11 +87,7 @@ playbook (step 3) to enable HTTPS.
 
 | Path | What it does |
 | --- | --- |
-| [Makefile](Makefile) | `make backend` / `make nginx` / `make frontend` / `make all` |
+| [Makefile](Makefile) | `make backend` / `make frontend` / `make all` |
 | [backend/playbook_backend.yaml](backend/playbook_backend.yaml) | Build wheel, install into venv, run systemd service |
 | [backend/gridfill.service](backend/gridfill.service) | systemd unit for `gridfill-server` |
 | [frontend/playbook_frontend.yaml](frontend/playbook_frontend.yaml) | Build the SPA and upload static files |
-| [nginx/playbook_nginx.yaml](nginx/playbook_nginx.yaml) | Site config, rate-limit zones, certbot renewal hook |
-| [nginx/reload-nginx](nginx/reload-nginx) | certbot deploy hook that reloads nginx |
-| [nginx/templates/gridfill.flannaghan.com.conf.j2](nginx/templates/gridfill.flannaghan.com.conf.j2) | nginx site (HTTP-only until cert exists, then HTTPS) |
-| [nginx/gridfill_ratelimit.conf](nginx/gridfill_ratelimit.conf) | `limit_req` / `limit_conn` zones |

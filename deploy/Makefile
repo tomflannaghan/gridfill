@@ -1,14 +1,11 @@
-INVENTORY := coultershaw_server,
+INVENTORY := metatron,
 
-.PHONY: all backend nginx frontend
+.PHONY: all backend frontend
 
-all: backend nginx frontend
+all: backend frontend
 
 backend:
 	cd backend && ansible-playbook -i $(INVENTORY) playbook_backend.yaml
-
-nginx:
-	cd nginx && ansible-playbook -i $(INVENTORY) playbook_nginx.yaml
 
 frontend:
 	cd frontend && ansible-playbook -i $(INVENTORY) playbook_frontend.yaml

@@ -16,7 +16,7 @@ This is a monorepo:
   plain JSON) — the backend above is only used to go from a raw scan to one.
   See [web/editor.md](web/editor.md) for the editor's intended behavior.
 - [deploy/](deploy/) — the Ansible deployment of the live site,
-  **https://gridfill.flannaghan.com**: `make backend` / `make nginx` /
+  **https://gridfill.flannaghan.com**, on metatron: `make backend` /
   `make frontend` (or `make all`) from `deploy/`. A web-only change needs just
   `make frontend`. See [deploy/README.md](deploy/README.md).
 

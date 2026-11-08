@@ -24,7 +24,7 @@ echo | openssl s_client -connect gridfill.flannaghan.com:443 -servername gridfil
 
 - The page must return 200 with `<title>Gridfill Editor</title>`, and every asset must return 200. A missing asset leaves a blank page, typically after a half-finished `make frontend`. Either is a **FAIL**.
 - HTTP not returning a 301 to HTTPS is a **WARN**.
-- A certificate that has expired is a **FAIL**; one expiring within 14 days is a **WARN**, because the snap certbot should have renewed it.
+- A certificate that has expired is a **FAIL**; one expiring within 14 days is a **WARN**, because metatron's acme.sh should have renewed the wildcard certificate.
 
 ## 2. Grid detection works
 
@@ -37,17 +37,17 @@ curl -s -F file=@python/tests/fixtures/barred.png -w '\n%{http_code}\n' $B/api/d
 It should return 200 within a few seconds with a `.cwd` document: JSON with `"format": "gridfill"`, a `version` equal to `_FORMAT_VERSION` in `python/src/gridfill/document.py`, and one grid of 144 cells. Count the grids and cells with a short Python one-liner rather than printing the response, which contains a large base64 image.
 
 - A 502 or 504 means nginx is up but the backend isn't: **FAIL**.
-- A 429 means the rate limit was hit (20 requests a minute, shared with real users). Wait a minute and retry once; if it persists, it's a **WARN**.
+- A 429 means the rate limit was hit (the backend allows 20 requests a minute per client IP). Wait a minute and retry once; if it persists, it's a **WARN**.
 - Any other error, a different format or version, or a different grid or cell count is a **FAIL**. A version mismatch means the backend and the repo are out of step, so a redeploy is probably missing.
 
 Only send one request (plus the one retry); the server is shared and detection is CPU heavy.
 
 ## 3. The service on the server
 
-Over SSH to `coultershaw_server` (read-only; give up after a timeout rather than hang):
+Over SSH to `metatron` (read-only; give up after a timeout rather than hang):
 
 ```bash
-timeout 30 ssh -o BatchMode=yes coultershaw_server '
+timeout 30 ssh -o BatchMode=yes metatron '
   systemctl is-active gridfill
   systemctl show gridfill -p NRestarts -p ActiveEnterTimestamp
   journalctl -u gridfill --since "-24h" -p warning --no-pager | tail -20

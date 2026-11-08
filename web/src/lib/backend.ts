@@ -9,7 +9,7 @@ import { loadCwdText, stripExtension, type LoadedDocument } from "./files.ts";
 
 /** Overridable via `VITE_GRIDFILL_API_URL`; matches `gridfill-server`'s default. */
 const API_BASE_URL =
-  (import.meta.env.VITE_GRIDFILL_API_URL as string | undefined) ?? "http://127.0.0.1:8420";
+  (import.meta.env.VITE_GRIDFILL_API_URL as string | undefined) ?? "http://127.0.0.1:3001";
 
 /** Upload an image or PDF to the backend and load the `.cwd` document it detects. */
 export async function detectFromImage(file: File): Promise<LoadedDocument> {

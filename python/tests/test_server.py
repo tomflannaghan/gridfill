@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
+from collections.abc import Iterator
+from pathlib import Path
 
 import cv2
 import httpx
@@ -17,6 +19,12 @@ from gridfill.server import app
 from tests.synthetic import make_grid
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def fresh_rate_limiter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give each test its own budget, so tests don't throttle one another."""
+    monkeypatch.setattr(server, "_rate_limiter", server._RateLimiter(per_minute=20, burst=10))
 
 
 def _png_bytes(image: np.ndarray) -> bytes:
@@ -107,3 +115,85 @@ def test_detect_serializes_concurrent_requests(monkeypatch: pytest.MonkeyPatch) 
 
     assert all(r.status_code == 200 for r in responses)
     assert state["peak"] == 1
+
+
+def _post_unsupported(headers: dict[str, str] | None = None) -> httpx.Response:
+    """A cheap request that still counts against the limit (400, no detection)."""
+    return client.post(
+        "/api/detect",
+        files={"file": ("notes.txt", b"hello", "text/plain")},
+        headers=headers,
+    )
+
+
+def test_rate_limiter_allows_burst_then_refills_at_the_sustained_rate() -> None:
+    limiter = server._RateLimiter(per_minute=20, burst=10)
+
+    assert all(limiter.retry_after("a", 0.0) == 0 for _ in range(11))
+    assert limiter.retry_after("a", 0.0) == pytest.approx(3.0)
+    # One token takes 3s to come back at 20/minute, and only one is available.
+    assert limiter.retry_after("a", 3.0) == 0
+    assert limiter.retry_after("a", 3.0) > 0
+
+
+def test_rate_limiter_tracks_clients_separately() -> None:
+    limiter = server._RateLimiter(per_minute=20, burst=0)
+
+    assert limiter.retry_after("a", 0.0) == 0
+    assert limiter.retry_after("a", 0.0) > 0
+    assert limiter.retry_after("b", 0.0) == 0
+
+
+def test_rate_limiter_forgets_clients_once_their_buckets_refill() -> None:
+    limiter = server._RateLimiter(per_minute=20, burst=0)
+
+    limiter.retry_after("a", 0.0)
+    limiter.retry_after("b", 1000.0)
+
+    assert set(limiter._buckets) == {"b"}
+
+
+def test_detect_returns_429_with_retry_after_when_over_limit() -> None:
+    assert all(_post_unsupported().status_code == 400 for _ in range(11))
+
+    response = _post_unsupported()
+
+    assert response.status_code == 429
+    assert int(response.headers["retry-after"]) >= 1
+    assert isinstance(response.json()["detail"], str)  # the editor displays this
+
+
+def test_rate_limited_response_is_readable_cross_origin() -> None:
+    """The dev frontend is on another origin; without CORS headers on the 429 it
+    would see a network failure rather than the message."""
+    origin = {"Origin": "http://localhost:5173"}
+    for _ in range(11):
+        _post_unsupported(origin)
+
+    response = _post_unsupported(origin)
+
+    assert response.status_code == 429
+    assert response.headers["access-control-allow-origin"] == "*"
+
+
+@pytest.fixture
+def mounted_frontend(tmp_path: Path) -> Iterator[None]:
+    (tmp_path / "index.html").write_text("<title>Gridfill Editor</title>")
+    (tmp_path / "app.js").write_text("console.log(1)")
+    routes_before = list(app.router.routes)
+    server._mount_frontend(tmp_path)
+    yield
+    app.router.routes[:] = routes_before
+
+
+@pytest.mark.usefixtures("mounted_frontend")
+def test_frontend_is_served_alongside_the_api() -> None:
+    assert "Gridfill Editor" in client.get("/").text
+    assert client.get("/app.js").status_code == 200
+    # The root mount must not shadow the API.
+    assert _post_unsupported().status_code == 400
+
+
+@pytest.mark.usefixtures("mounted_frontend")
+def test_static_requests_are_not_rate_limited() -> None:
+    assert all(client.get("/app.js").status_code == 200 for _ in range(30))

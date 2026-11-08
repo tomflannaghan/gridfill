@@ -1,12 +1,12 @@
 ---
-# Build the web editor locally and upload the static files nginx serves.
+# Build the web editor locally and upload the static files gridfill-server serves.
 #
 # The SPA talks to the backend at {{ frontend_api_url }} (baked in at build
 # time via VITE_GRIDFILL_API_URL). It's the public site origin, so requests go
-# to /api/detect on the same host and nginx proxies them to the backend.
+# to /api/detect on the same host.
 #
 #   cd frontend
-#   ansible-playbook -i coultershaw_server, playbook_frontend.yaml
+#   ansible-playbook -i metatron, playbook_frontend.yaml
 
 - name: Build and deploy the gridfill web editor
   hosts: all
@@ -42,8 +42,7 @@
         state: directory
         mode: "0755"
 
-    # Clear old hashed assets so stale bundles don't linger; keep .well-known
-    # (used by certbot's http-01 challenge).
+    # Clear old hashed assets so stale bundles don't linger.
     - name: Clear old assets
       ansible.builtin.file:
         path: "{{ webroot }}/assets"

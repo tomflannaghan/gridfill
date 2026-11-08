@@ -7,15 +7,15 @@
 # compiled on the server and no private package index is needed.
 #
 #   cd backend
-#   ansible-playbook -i coultershaw_server, playbook_backend.yaml
+#   ansible-playbook -i metatron, playbook_backend.yaml
 
 - name: Deploy gridfill backend
   hosts: all
   become: true
   vars:
     app_user: gridfill
-    app_home: /home/gridfill
-    venv: /home/gridfill/venv
+    app_home: /opt/gridfill
+    venv: /opt/gridfill/venv
 
   tasks:
     # --- build the wheel on the local machine ---

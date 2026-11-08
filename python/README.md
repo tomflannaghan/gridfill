@@ -24,7 +24,7 @@ recognition; the document holds the empty grid ready to be filled in.
 
 ```bash
 uv pip install -e ".[server]"
-gridfill-server                # serves http://127.0.0.1:8420
+gridfill-server                # serves http://127.0.0.1:3001
 ```
 
 Exposes the same detection as the CLI over HTTP for the web editor: `POST
